@@ -520,6 +520,8 @@ def handle_discard_hand_card(task: TriggerTask):
     box = find_box_at_point(task, 0.5, 0.356)
     if box and "手牌中仍有可用卡牌" in box.name:
         task.log_info("检测到手牌丢弃页面，点击丢弃")
+        task.click(0.424, 0.500)
+        task.sleep(0.5)
         task.click(0.663, 0.607)
         return True
     return False
