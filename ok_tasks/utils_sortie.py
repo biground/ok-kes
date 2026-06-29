@@ -383,25 +383,25 @@ def handle_battle_page(task: TriggerTask):
             _try_all_card_keys(task, hand_count)
         else:
             task.log_info("战斗页面无手牌，按E")
-            # 检查右下角白色比例，小于5%则不执行按E
+            # 检查右下角白色比例，小于40%则不执行按E
             from ok.feature.Box import Box
             from ok.util.color import calculate_color_percentage
             e_box = Box(
-                x=int(0.849 * task.width),
-                y=int(0.792 * task.height),
-                width=int((0.932 - 0.849) * task.width),
-                height=int((0.943 - 0.792) * task.height)
+                x=int(0.882 * task.width),
+                y=int(0.871 * task.height),
+                width=int((0.895 - 0.882) * task.width),
+                height=int((0.886 - 0.871) * task.height)
             )
             white_ratio = calculate_color_percentage(
                 task.frame,
                 {'r': (255, 255), 'g': (255, 255), 'b': (255, 255)},
                 box=e_box
             )
-            if white_ratio >= 0.04:
+            if white_ratio >= 0.40:
                 task.log_info(f"右下角白色比例{white_ratio:.2%}，按E")
                 task.send_key("e")
             else:
-                task.log_info(f"右下角白色比例{white_ratio:.2%}小于4%，跳过按E")
+                task.log_info(f"右下角白色比例{white_ratio:.2%}小于40%，跳过按E")
         return True
 
     if any(int(card["key"]) > hand_count for card in cards):
@@ -434,9 +434,9 @@ def handle_battle_page(task: TriggerTask):
 
     task.log_info(f"战斗出牌: {chosen['name']} -> {chosen['key']}")
     task.send_key(chosen["key"])
-    task.sleep(1)
+    task.sleep(0.5)
     task.send_key("enter")
-    task.sleep(4)
+    task.sleep(2)
     return True
 
 
