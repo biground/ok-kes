@@ -81,6 +81,15 @@ def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep
     selected = 0
     used = set()  # 记录已选 box 的 (x, y, w, h)，避免同一张牌被重复选择
     for i in range(max_scrolls + 1):
+        # 记录当前区域发现的所有卡牌
+        found_cards = [b for b in task.all_texts
+                       if 0.274 <= (b.x + b.width / 2) / task.width <= 0.931
+                       and 0.106 <= (b.y + b.height / 2) / task.height <= 0.878
+                       and _card_has_type_below(task, b)]
+        if found_cards:
+            found_names = [b.name for b in found_cards]
+            task.log_info(f"select_card 第{i+1}次查找, 目标: {card_names}, 区域内发现卡牌: {found_names}")
+
         for name in card_names:
             card = next((b for b in task.all_texts
                          if b.name == name 
@@ -89,6 +98,7 @@ def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep
                      and (b.x, b.y, b.width, b.height) not in used
                      and _card_has_type_below(task, b)), None)
             if card:
+                task.log_info(f"select_card 匹配成功: 名称「{card.name}」, 位置({card.x},{card.y})")
                 task.click_box(card)
                 used.add((card.x, card.y, card.width, card.height))
                 selected += 1
@@ -103,6 +113,7 @@ def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep
                 task.all_texts = task.ocr()
         # 未找到且未达最大次数，向下滚动后重新识别
         if i < max_scrolls:
+            task.log_info(f"select_card 第{i+1}次未找到目标, 向下滚动")
             task.scroll_relative(0.5, 0.7, -3)
             task.sleep(0.3)
             task.all_texts = task.ocr()
@@ -120,8 +131,11 @@ def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep
                 and _card_has_type_below(task, b)
             ]
             if not cards:
+                task.log_info("select_card fallback: 区域内无可选卡牌，停止补充")
                 break
-            task.click_box(max(cards, key=lambda b: (b.y, b.x)))
+            fallback_card = max(cards, key=lambda b: (b.y, b.x))
+            task.log_info(f"select_card fallback 补充点击: 名称「{fallback_card.name}」, 位置({fallback_card.x},{fallback_card.y})")
+            task.click_box(fallback_card)
             selected += 1
             task.sleep(0.3)
 
