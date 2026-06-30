@@ -355,16 +355,38 @@ def handle_card_reward(task: TriggerTask):
 
 
 def handle_equipment(task: TriggerTask):
-    """装备选择页面: 依次选择三个装备并确认。"""
+    """装备选择/安装界面: 区分安装装备和选择装备。"""
     box = find_box_at_point(task, 0.499, 0.126)
     if box and box.name == "装备":
-        task.log_info("检测到装备选择，进行相应操作")
-        for x, y in [(0.686, 0.736), (0.677, 0.514), (0.692, 0.300)]:
-            task.click(x, y)
-            task.sleep(0.5)
-        task.click(0.884, 0.931)
-        task.sleep(2)
-        return True
+        task.log_info("检测到装备页面")
+        # 判断是否为安装装备界面（选择主战员）
+        equip_hint = find_box_at_point(task, 0.921, 0.135)
+        if equip_hint and "请选择主战员" in equip_hint.name:
+            task.log_info("检测到安装装备界面，随机选择主战员")
+            px1, py1 = int(0.609 * task.width), int(0.290 * task.height)
+            px2, py2 = int(0.652 * task.width), int(0.789 * task.height)
+            lv_texts = sorted(
+                [b for b in task.all_texts
+                 if b.x >= px1 and b.y >= py1 and b.x + b.width <= px2 and b.y + b.height <= py2
+                 and b.name in "等级"],
+                key=lambda b: b.y
+            )
+            if lv_texts:
+                chosen = random.choice(lv_texts)
+                task.log_info(f"随机选择主战员: 位置 y={chosen.y}")
+                task.click(0.756, (chosen.y + chosen.height / 2) / task.height)
+                task.sleep(0.5)
+                task.click(0.884, 0.931)
+                task.sleep(2)
+                return True
+            task.log_info("未找到主战员等级信息")
+            return False
+        else:
+            task.log_info("检测到选择装备界面，随机点击装备")
+            chosen = random.choice([(0.518, 0.454), (0.521, 0.600)])
+            task.click(*chosen)
+            task.sleep(1)
+            return True
     return False
 
 
