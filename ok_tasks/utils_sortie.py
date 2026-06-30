@@ -659,6 +659,7 @@ PAGE_HANDLERS = [
     handle_enter,
     handle_route_selection,
     handle_obtain_reward,
+    handle_rest,
     handle_view_original,
     handle_battle_failed,
     handle_data_collected,
