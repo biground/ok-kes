@@ -68,7 +68,7 @@ def _card_has_type_below(task: TriggerTask, box):
         bx = (b.x + b.width / 2) / task.width
         dy = by - box_bottom_y
         # 类型标签可能在卡牌名正下方或略微重叠，允许 -0.005 ~ 0.040
-        if -0.005 <= dy <= 0.040 and abs(bx - box_center_x) <= 0.040:
+        if -0.005 <= dy <= 0.040:
             if "攻击" in b.name or "强化" in b.name or "技能" in b.name:
                 return True
     return False
