@@ -677,8 +677,8 @@ PAGE_HANDLERS = [
     handle_leave,
     handle_skip,
     handle_event_task,
+    handle_close_button,
     handle_escape,
     handle_weakness_info,
     handle_minimizemap,
-    handle_close_button,
 ]

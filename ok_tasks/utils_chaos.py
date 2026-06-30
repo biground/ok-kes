@@ -148,6 +148,6 @@ PAGE_HANDLERS = [
     handle_memory_elimination,
     handle_leave,
     handle_skip,
-    handle_event_task,
     handle_close_button,
+    handle_event_task,
 ]
