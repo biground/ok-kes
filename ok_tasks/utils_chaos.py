@@ -175,6 +175,33 @@ def log_credit(task: TriggerTask):
     return False
 
 
+def handle_battle_auto_check(task: TriggerTask):
+    """战斗页面: 检测手牌数并检查自动战斗是否开启，如关闭则开启。"""
+    box = find_box_at_point(task, 0.512, 0.969)
+    if not (box and re.search(r'\d+/10', box.name)):
+        return False
+
+    from ok.feature.Box import Box
+    from ok.util.color import calculate_color_percentage
+    auto_box = Box(
+        x=int(0.877 * task.width),
+        y=int(0.050 * task.height),
+        width=int(4),
+        height=int(4)
+    )
+    white_ratio = calculate_color_percentage(
+        task.frame,
+        {'r': (255, 255), 'g': (255, 255), 'b': (255, 255)},
+        box=auto_box
+    )
+    task.log_info(f"自动战斗按钮区域白色占比: {white_ratio:.2%}")
+    if white_ratio > 0.02:
+        task.log_info("自动战斗处于关闭状态，点击开启")
+        task.click(0.880, 0.056)
+        task.sleep(0.5)
+    return True
+
+
 def handle_battle_crash(task: TriggerTask):
     """战斗信息错乱 / 点击重试: 点击屏幕中央恢复。"""
     if find_text(task, r'出现错乱') or find_text(task, r'点击重试'):
@@ -979,6 +1006,7 @@ PAGE_HANDLERS = [
     log_credit,
     handle_non_battle_page,
     handle_battle_crash,
+    handle_battle_auto_check,
     handle_close_page,
     handle_center_confirm,
     handle_settlement,
