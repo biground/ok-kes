@@ -386,6 +386,8 @@ def handle_equipment(task: TriggerTask):
             chosen = random.choice([(0.518, 0.454), (0.521, 0.600)])
             task.click(*chosen)
             task.sleep(1)
+            task.click(0.919, 0.931)
+            task.sleep(1)
             return True
     return False
 
