@@ -217,11 +217,11 @@ def handle_battle_page(task: TriggerTask):
                 {'r': (255, 255), 'g': (255, 255), 'b': (255, 255)},
                 box=e_box
             )
-            if white_ratio >= 0.40:
+            if white_ratio >= 0.30:
                 task.log_info(f"右下角白色比例{white_ratio:.2%}，按E")
                 task.send_key("e")
             else:
-                task.log_info(f"右下角白色比例{white_ratio:.2%}小于40%，跳过按E")
+                task.log_info(f"右下角白色比例{white_ratio:.2%}小于30%，跳过按E")
         return True
     if any(int(card["key"]) > hand_count for card in cards):
         task.log_info(f"识别到的按键超过当前手牌数{hand_count}，按当前手牌数从大到小尝试")
