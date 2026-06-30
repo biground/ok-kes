@@ -565,8 +565,8 @@ def handle_event_task(task: TriggerTask):
 
         desc_lines = [
             b for b in task.all_texts
-            if b.x >= desc_left - 0.01 * task.width and b.y >= desc_top
-            and b.x + b.width <= desc_right + 0.01 * task.width and b.y + b.height <= desc_bottom
+            if b.x >= desc_left - 0.01 * task.width and b.y + b.height >= desc_top - 0.02 * task.height
+            and b.x + b.width <= desc_right + 0.01 * task.width and b.y <= desc_bottom + 0.02 * task.height
             and b.name not in ["确认", "返回", "跳过"]
         ]
 
