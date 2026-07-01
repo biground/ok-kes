@@ -210,7 +210,7 @@ def handle_battle_page(task: TriggerTask):
             return False
     card_names = _hand_card_names(task)
     cards = _hand_cards(task)
-    if _get_config_value(task, '从右往左出牌', True) and (cards or card_names):
+    if (cards or card_names):
         task.log_info(f"从右往左出牌配置为True，按当前手牌数{hand_count}从大到小出牌")
         for round_index in range(3):
             _try_all_card_keys(task, hand_count)
@@ -229,64 +229,7 @@ def handle_battle_page(task: TriggerTask):
                 break
             task.log_info(f"第{round_index + 1}轮出牌后仍有手牌{hand_count}张，继续下一轮")
         return True
-    if not cards:
-        if card_names:
-            task.log_info(f"识别到{len(card_names)}张手牌但没有识别到按键，按当前手牌数{hand_count}从大到小尝试")
-            _try_all_card_keys(task, hand_count)
-        else:
-            task.log_info("战斗页面无手牌，按E")
-            from ok.feature.Box import Box
-            from ok.util.color import calculate_color_percentage
-            e_box = Box(
-                x=int(0.882 * task.width),
-                y=int(0.871 * task.height),
-                width=int((0.895 - 0.882) * task.width),
-                height=int((0.886 - 0.871) * task.height)
-            )
-            white_ratio = calculate_color_percentage(
-                task.frame,
-                {'r': (255, 255), 'g': (255, 255), 'b': (255, 255)},
-                box=e_box
-            )
-            if white_ratio >= 0.30:
-                task.log_info(f"右下角白色比例{white_ratio:.2%}，按E")
-                task.send_key("e")
-            else:
-                task.log_info(f"右下角白色比例{white_ratio:.2%}小于30%，跳过按E")
-        return True
-    if any(int(card["key"]) > hand_count for card in cards):
-        task.log_info(f"识别到的按键超过当前手牌数{hand_count}，按当前手牌数从大到小尝试")
-        _try_all_card_keys(task, hand_count)
-        task._last_card_play_count = 0
-        return True
-    chosen = None
-    for name in _get_config_value(task, "出牌优先级", []):
-        chosen = next((card for card in cards if name in card["name"]), None)
-        if chosen:
-            break
-    chosen = chosen or max(cards, key=lambda card: card["x"])
-    if chosen["key"] == "0":
-        task.log_info(f"「{chosen['name']}」对应按键识别为0，按当前手牌数{hand_count}从大到小尝试")
-        _try_all_card_keys(task, hand_count)
-        task._last_card_play_count = 0
-        return True
-    same_count = getattr(task, "_last_card_play_count", 0) + 1 if getattr(task, "_last_card_name", None) == chosen["name"] else 1
-    task._last_card_name = chosen["name"]
-    task._last_card_play_count = same_count
-    if same_count >= 3:
-        task.log_info(f"「{chosen['name']}」连续{same_count}次仍在手牌，按当前手牌数{hand_count}从大到小尝试")
-        _try_all_card_keys(task, hand_count)
-        task._last_card_play_count = 0
-        return True
-    task.log_info(f"战斗出牌: {chosen['name']} -> {chosen['key']}")
-    task.send_key(chosen["key"])
-    task.sleep(0.5)
-    task.send_key("enter")
-    if re.search(r'展开极.', chosen['name']):
-        task.log_info(f"卡牌「{chosen['name']}」包含展开极，延长等待5秒")
-        task.sleep(5)
-    else:
-        task.sleep(2)
+    task.send_key("e")
     return True
 
 

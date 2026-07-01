@@ -25,13 +25,13 @@ class SortieMode(TriggerTask):
         self.default_config["闪光卡牌列表"] = ["剑雨", "展开极光", "一缕光芒","缕光芒"]
         self.default_config["领取奖励"] = False
         self.default_config["使用体力药"] = False
-        self.default_config["出牌优先级"] = ["剑雨", "一缕光芒","缕光芒", "极光剑", "展开极光"]
+        # self.default_config["出牌优先级"] = ["剑雨", "一缕光芒","缕光芒", "极光剑", "展开极光"]
         self.default_config["丢弃卡牌优先级"] = ["展开极光", "极光剑", "凝聚极光"]
         self.default_config["进入商店"] = False
         self.default_config["卡牌奖励优先级"] = ["梦之边境", "装备包"]
         self.default_config["任务优先级"] = ["选取随机3条命运","信用点增加", "移除"]
         self.default_config["拉黑主战员"] = ["戴安娜", "阿黛尔海特"]
-        self.default_config["从右往左出牌"] = True
+        # self.default_config["从右往左出牌"] = True
 
     def _ocr_and_simplify(self):
         """执行OCR并将所有识别文本转简体。"""
