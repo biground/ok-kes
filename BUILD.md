@@ -20,10 +20,11 @@ python -m ok.update.inline_ok_requirements
 ### 2. 执行 PyInstaller 打包
 
 ```bash
-pyinstaller --onefile --noconsole --uac-admin --name ok-script-app ^
+pyinstaller --onefile --noconsole --uac-admin --name "卡厄思自动化工具v1.0.3" --icon icons/icon.ico ^
   --add-data assets;assets ^
   --add-data i18n;i18n ^
   --add-data ok_tasks;ok_tasks ^
+  --add-data "C:\Users\baoxin\miniconda3\envs\oknikke\Lib\site-packages\opencc\clib\share\opencc;opencc\clib\share\opencc" ^
   --hidden-import ok_tasks.SortieMode ^
   --hidden-import ok_tasks.ChaosMode ^
   --hidden-import utils_sortie ^
@@ -35,19 +36,20 @@ pyinstaller --onefile --noconsole --uac-admin --name ok-script-app ^
   --collect-all onnxocr ^
   --collect-all openvino ^
   --collect-all pyappify ^
+  --collect-data opencc ^
   main.py
 ```
 
 ### 3. 清理临时文件
 
 ```bash
-rmdir /s /q build dist\ok-script-app
-del ok-script-app.spec _build.py build_log.txt
+rmdir /s /q build
+del "卡厄思自动化工具v1.0.3.spec"
 ```
 
 ### 4. 产物
 
-位于 `dist\ok-script-app.exe`，约 265 MB。
+位于 `dist\卡厄思自动化工具v1.0.3.exe`，约 265 MB。
 
 ## 关键说明
 
@@ -60,6 +62,8 @@ del ok-script-app.spec _build.py build_log.txt
 | `--hidden-import src.globals` | 动态引用的全局对象模块 |
 | `--collect-all openvino` | 包含 OpenVINO 完整库（否则缺少 ONNX 前端导致模型加载失败） |
 | `--collect-all onnxocr` | 包含 OCR 模型文件（.onnx）和代码 |
+| `collect-data opencc` | 包含 OpenCC 字典文件（`t2s.json` 等），否则运行时 `OpenCC('t2s')` 会报错找不到文件 |
+| `--add-data opencc\clib\share\opencc` | 显式指定 OpenCC 字典数据目录（`--collect-data opencc` 在某些环境中可能漏打包） |
 
 ## 代码层面的必要修改
 
