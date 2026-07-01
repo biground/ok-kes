@@ -30,6 +30,7 @@ class SortieMode(TriggerTask):
         self.default_config["进入商店"] = False
         self.default_config["卡牌奖励优先级"] = ["梦之边境", "装备包"]
         self.default_config["任务优先级"] = ["选取随机3条命运","信用点增加", "移除"]
+        self.default_config["拉黑主战员"] = ["戴安娜", "阿黛尔海特"]
 
     def _ocr_and_simplify(self):
         """执行OCR并将所有识别文本转简体。"""

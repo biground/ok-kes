@@ -32,6 +32,12 @@ def _get_member_priority(task: TriggerTask):
     return list(value) if isinstance(value, (list, tuple)) else ["尼娅", "麦格纳", "米卡", "卡修斯"]
 
 
+def _get_blacklisted_members(task: TriggerTask):
+    """读取拉黑主战员列表，返回列表；解析失败使用默认值。"""
+    value = _get_config_value(task, '拉黑主战员', ["戴安娜", "阿黛尔海特"])
+    return list(value) if isinstance(value, (list, tuple)) else ["戴安娜", "阿黛尔海特"]
+
+
 def _get_battle_member_priority(task: TriggerTask):
     """读取出战主战员优先级配置，返回列表；解析失败使用默认顺序。"""
     value = _get_config_value(task, "出战主战员优先级", ["海德玛丽", "九", "力", "绯"])
@@ -392,20 +398,26 @@ def handle_battle_member_selection(task: TriggerTask):
 
 
 def handle_member_selection(task: TriggerTask):
-    """主战员选择页面: 优先选配置角色；没有则点击每个名字下方按钮刷新一次，仍没有就随机选。"""
+    """主战员选择页面: 优先选配置角色（跳过拉黑角色）；没有则点击每个名字下方按钮刷新一次，仍没有就随机选（跳过拉黑角色）。"""
     prompt = find_box_at_point(task, 0.500, 0.931)
     if not (prompt and "主战员" in prompt.name):
         return False
     priority = _get_member_priority(task)
+    blacklisted = _get_blacklisted_members(task)
+    task.log_info(f"主战员选择: 优先级={priority}, 拉黑列表={blacklisted}")
+
+    def not_blacklisted(slot):
+        return not any(blk in slot["name"] for blk in blacklisted)
+
     slots = _read_member_slots(task)
     chosen = None
     for name in priority:
-        chosen = next((slot for slot in slots if name in slot["name"]), None)
+        chosen = next((slot for slot in slots if name in slot["name"] and not_blacklisted(slot)), None)
         if chosen:
             task.log_info(f"主战员选择: 优先选择「{chosen['name']}」")
             break
     if chosen is None:
-        task.log_info("主战员选择: 未找到优先角色，点击三个名字下方按钮刷新一次")
+        task.log_info("主战员选择: 未找到优先角色或优先角色被拉黑，点击三个名字下方按钮刷新一次")
         for slot in slots:
             task.click(slot["x"], slot["refresh_y"])
             task.sleep(0.5)
@@ -413,14 +425,17 @@ def handle_member_selection(task: TriggerTask):
         task.all_texts = task.ocr()
         slots = _read_member_slots(task)
         for name in priority:
-            chosen = next((slot for slot in slots if name in slot["name"]), None)
+            chosen = next((slot for slot in slots if name in slot["name"] and not_blacklisted(slot)), None)
             if chosen:
                 task.log_info(f"主战员选择: 刷新后选择「{chosen['name']}」")
                 break
     if chosen is None:
-        valid_slots = [slot for slot in slots if slot["name"]]
+        valid_slots = [slot for slot in slots if slot["name"] and not_blacklisted(slot)]
         if not valid_slots:
-            return False
+            valid_slots = [slot for slot in slots if slot["name"]]
+            if not valid_slots:
+                return False
+            task.log_info("主战员选择: 所有候选都被拉黑，从全部候选中随机选择")
         chosen = random.choice(valid_slots)
         task.log_info(f"主战员选择: 未找到优先角色，随机选择「{chosen['name']}」")
     task.click(chosen["x"], chosen["y"])
