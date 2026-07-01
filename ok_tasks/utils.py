@@ -408,7 +408,7 @@ def handle_main_member_flash(task: TriggerTask):
 
 
 def handle_card_reward(task: TriggerTask):
-    """卡牌奖励页面: 按卡牌奖励优先级选择卡牌并确认。"""
+    """卡牌奖励页面: 在区域内OCR识别卡牌名，按优先级选择卡牌并确认。"""
     box = find_box_at_point(task, 0.498, 0.129)
     if not (box and box.name == "卡牌奖励"):
         return False
@@ -416,32 +416,33 @@ def handle_card_reward(task: TriggerTask):
     task.log_info("检测到卡牌奖励页面")
     priority = _get_card_list(task, "卡牌奖励优先级")
 
-    card_positions = [(0.256, 0.311), (0.499, 0.315), (0.716, 0.314)]
-    card_names = []
-    for cx, cy in card_positions:
-        b = find_box_at_point(task, cx, cy)
-        card_names.append(b.name if b else "")
+    # 在指定区域内查找所有满足卡牌特征的文本框
+    x1, y1, x2, y2 = 0.094, 0.231, 0.973, 0.875
+    cards = [
+        b for b in task.all_texts
+        if x1 <= (b.x + b.width / 2) / task.width <= x2
+        and y1 <= (b.y + b.height / 2) / task.height <= y2
+        and _card_has_type_below(task, b)
+        and len(b.name.strip()) > 1
+    ]
+    task.log_info(f"卡牌奖励区域识别到{len(cards)}张卡牌: {[b.name for b in cards]}")
 
-    chosen_idx = None
+    chosen_card = None
     for pri_name in priority:
-        for i, name in enumerate(card_names):
-            if pri_name and name in pri_name:
-                chosen_idx = i
-                task.log_info(f"按优先级选择卡牌: {name}（配置: {pri_name}）")
-                break
-        if chosen_idx is not None:
+        chosen_card = next((b for b in cards if pri_name and pri_name in b.name), None)
+        if chosen_card:
+            task.log_info(f"按优先级选择卡牌: {chosen_card.name}（配置: {pri_name}）")
             break
 
-    if chosen_idx is None:
-        chosen_idx = random.choice(range(3))
-        task.log_info(f"未命中优先级，随机选择卡牌: {card_names[chosen_idx] if card_names[chosen_idx] else '位置' + str(chosen_idx)}")
+    if chosen_card is None and cards:
+        chosen_card = random.choice(cards)
+        task.log_info(f"未命中优先级，随机选择卡牌: {chosen_card.name}")
 
-    cx, cy = card_positions[chosen_idx]
-    task.click(cx, cy)
-    task.sleep(1)
-    # task.click(0.922, 0.929)
-    # task.sleep(0.5)
-    return True
+    if chosen_card:
+        task.click_box(chosen_card)
+        task.sleep(1)
+        return True
+    return False
 
 
 def handle_equipment(task: TriggerTask):

@@ -109,6 +109,7 @@ PAGE_HANDLERS = [
     log_credit,
 
     handle_close_button, #关闭按钮
+    handle_card_assign,
     handle_confirm, #确认按钮
     handle_remove, #移除按钮
     handle_flash, #闪光按钮
@@ -124,7 +125,6 @@ PAGE_HANDLERS = [
     handle_settlement,
     handle_destiny_choice,
     handle_main_member_flash,
-    handle_card_assign,
     handle_card_reward,
     handle_equipment,
     handle_mask_card,
