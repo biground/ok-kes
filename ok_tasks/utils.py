@@ -152,19 +152,103 @@ def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep
     return selected
 
 
-def identify_node_type(task: TriggerTask, region, name=""):
-    """根据主色相识别路线节点类型，返回节点类型字符串名称。"""
-    box = task.box_of_screen(*region, name=f"color_{name}")
+def calculate_dominant_hue(task: TriggerTask, region):
+    """计算区域的主导色相，返回色相值(0-179)，无有效色相返回-1。"""
+    box = task.box_of_screen(*region)
     frame = task.frame[box.y:box.y + box.height, box.x:box.x + box.width, :3]
     hue, sat, val = cv2.split(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV))
 
     valid_hue = hue[(sat > 30) & (val > 30)]
     if len(valid_hue) == 0:
+        return -1
+
+    hist = cv2.calcHist([valid_hue.astype(np.float32)], [0], None, [180], [0, 180])
+    return int(np.argmax(hist))
+
+
+def is_button_active(task: TriggerTask, button_box):
+    """判断按钮是否处于可点击状态（激活状态）。
+
+    参数:
+        task: TriggerTask实例
+        button_box: 按钮文本的Box对象（像素坐标）
+
+    返回:
+        bool: True表示按钮可点击（激活），False表示不可点击（未激活/灰色）
+    """
+    # 计算左侧检测区域（按钮图标/背景区域）
+    # 根据用户提供的例子推算比例：
+    # 按钮box: (0.898, 0.908, 0.941, 0.950) w=0.043, h=0.042
+    # 左侧区域: (0.866, 0.912, 0.895, 0.947) w=0.029, h=0.035
+    # 左侧区域宽度 = 按钮宽度 * 0.67，x = 按钮x - 左侧区域宽度 * 1.1
+    # 左侧区域高度 = 按钮高度 * 0.83，y = 按钮y + 按钮高度 * 0.1
+
+    left_width = int(button_box.width * 0.67)
+    left_height = int(button_box.height * 0.83)
+    left_x = button_box.x - int(left_width * 1.1)
+    left_y = button_box.y + int(button_box.height * 0.1)
+
+    # 确保区域在屏幕内
+    if left_x < 0:
+        left_x = 0
+    if left_y < 0:
+        left_y = 0
+    if left_x + left_width > task.width:
+        left_width = task.width - left_x
+    if left_y + left_height > task.height:
+        left_height = task.height - left_y
+
+    if left_width <= 0 or left_height <= 0:
+        task.log_info(f"按钮左侧区域无效: ({left_x}, {left_y}, {left_width}, {left_height})")
+        return False
+
+    # 提取区域图像
+    region_img = task.frame[left_y:left_y + left_height, left_x:left_x + left_width, :3]
+    if region_img.size == 0:
+        task.log_info("按钮左侧区域图像为空")
+        return False
+
+    # 计算平均BGR颜色
+    avg_color = cv2.mean(region_img)[:3]  # B, G, R 平均值
+    avg_b, avg_g, avg_r = avg_color
+
+    # 判断是否接近禁用灰色 (195,195,195)
+    # 容错范围：每个通道在190-200之间，且三个通道值接近
+    target_gray = 195
+    tolerance = 5  # 允许±5的误差
+
+    # 计算范围边界
+    lower_bound = target_gray - tolerance  # 190
+    upper_bound = target_gray + tolerance  # 200
+
+    # 检查每个通道是否在目标范围内
+    in_range = (
+        lower_bound <= avg_b <= upper_bound and
+        lower_bound <= avg_g <= upper_bound and
+        lower_bound <= avg_r <= upper_bound
+    )
+
+    # 检查三个通道是否接近（最大差异小）
+    max_diff = max(abs(avg_b - avg_g), abs(avg_g - avg_r), abs(avg_r - avg_b))
+    is_close = max_diff < tolerance
+
+    # 如果是接近(195,195,195)的灰色，按钮不可点击
+    is_disabled_gray = in_range and is_close
+
+    task.log_info(f"按钮左侧区域颜色: B={avg_b:.1f}, G={avg_g:.1f}, R={avg_r:.1f}, "
+                  f"是否禁用灰色={is_disabled_gray} (范围{lower_bound}-{upper_bound}, 最大差异={max_diff:.1f})")
+
+    # 如果是禁用灰色，按钮不可点击；否则可点击
+    return not is_disabled_gray
+
+
+def identify_node_type(task: TriggerTask, region, name=""):
+    """根据主色相识别路线节点类型，返回节点类型字符串名称。"""
+    dominant_hue = calculate_dominant_hue(task, region)
+    if dominant_hue == -1:
         task.log_info(f"节点{name}识别: 无有效色相，判为未知")
         return "未知"
 
-    hist = cv2.calcHist([valid_hue.astype(np.float32)], [0], None, [180], [0, 180])
-    dominant_hue = int(np.argmax(hist))
     if dominant_hue <= 35:
         result = "休息"
     elif 90 <= dominant_hue <= 100:
@@ -278,10 +362,19 @@ def handle_skip(task: TriggerTask):
 
 
 def handle_destiny_choice(task: TriggerTask):
-    """命运选择奖励页面: 随机选择一个命运标题并确认。"""
+    """命运选择奖励页面: 随机选择一个命运标题。"""
     box = find_box_at_point(task, 0.499, 0.932)
     if box and re.search(r'请选择你的命运', box.name):
         task.log_info("检测到命运选择奖励，进行相应操作")
+        task.sleep(2)  # 给按钮一些加载时间
+
+        # 检查确认按钮是否已处于激活状态
+        # 在确认按钮点击位置附近查找"确认"文本
+        confirm_box = find_box_at_point(task, 0.884, 0.931)
+        if confirm_box and confirm_box.name == "确认":
+            if is_button_active(task, confirm_box):
+                task.log_info("确认按钮已激活，跳过选择（由其他逻辑处理确认）")
+                return False  # 按钮已激活，不处理，让其他逻辑点击确认
         # 在命运标题区域随机选择一个
         titles = [
             b for b in task.all_texts
@@ -294,13 +387,9 @@ def handle_destiny_choice(task: TriggerTask):
             chosen = random.choice(titles)
             task.log_info(f"随机选择命运: {chosen.name}")
             task.click_box(chosen)
-        else:
-            task.log_info("未找到命运标题，点击默认位置")
-            task.click(0.508, 0.487)
-        task.sleep(2)
-        task.click(0.884, 0.931)
-        task.sleep(2)
-        return True
+            task.sleep(1)
+            # 选择命运后不点击确认按钮，返回False让其他逻辑处理
+            return False
     return False
 
 
@@ -496,9 +585,13 @@ def handle_confirm(task: TriggerTask):
     """通用"确认"按钮。"""
     box = find_exact_text(task, "确认")
     if box:
-        task.log_info("检测到确认操作，点击确认")
-        task.click_box(box)
-        return True
+        if is_button_active(task, box):
+            task.log_info("检测到确认操作，点击确认")
+            task.click_box(box)
+            return True
+        else:
+            task.log_info("确认按钮未激活（灰色），跳过点击")
+            return False
     return False
 
 

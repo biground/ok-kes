@@ -3,7 +3,7 @@ from ok import TriggerTask
 from utils import (
     _simplify_texts, _get_config_value, _get_card_list, _get_route_priority,
     find_box_at_point, find_text, find_exact_text,
-    _card_has_type_below, select_card, identify_node_type,
+    _card_has_type_below, select_card, identify_node_type, calculate_dominant_hue,
     _cluster_region_boxes, group_dialog_columns,
     log_credit, handle_battle_crash, handle_close_page,
     handle_center_confirm, handle_settlement, handle_skip,
@@ -22,8 +22,6 @@ from utils import (
 
 import re
 import random
-import cv2
-import numpy as np
 
 
 # ------------------------- 出击模式独有工具 -------------------------
@@ -118,16 +116,8 @@ def _battle_member_boxes(task: TriggerTask):
 
 def _confirm_battle_member_selection(task: TriggerTask):
     """出战主战员选择后，按确认按钮色相决定确认或返回。"""
-    box = task.box_of_screen(0.901, 0.931, 0.911, 0.941, name="battle_member_confirm_color")
-    frame = task.frame[box.y:box.y + box.height, box.x:box.x + box.width, :3]
-    hue, sat, val = cv2.split(cv2.cvtColor(frame, cv2.COLOR_BGR2HSV))
-    valid_hue = hue[(sat > 30) & (val > 30)]
-    if len(valid_hue) > 0:
-        hist = cv2.calcHist([valid_hue.astype(np.float32)], [0], None, [180], [0, 180])
-        dominant_hue = int(np.argmax(hist))
-    else:
-        dominant_hue = -1
-    if 7 <= dominant_hue <= 17:
+    dominant_hue = calculate_dominant_hue(task, (0.901, 0.931, 0.911, 0.941))
+    if dominant_hue != -1 and 7 <= dominant_hue <= 17:
         task.log_info(f"出战主战员确认按钮色相={dominant_hue}，点击确认")
         task.click(0.906, 0.936)
         task.sleep(2)
