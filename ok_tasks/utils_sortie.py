@@ -107,8 +107,8 @@ def _battle_member_boxes(task: TriggerTask):
     """读取出战主战员列表里的可点击主战员名称文本。"""
     return [
         box for box in task.all_texts
-        if 0.08 <= (box.x + box.width / 2) / task.width <= 0.92
-        and 0.12 <= (box.y + box.height / 2) / task.height <= 0.95
+        if 0.100 <= (box.x + box.width / 2) / task.width <= 0.984
+        and 0.100 <= (box.y + box.height / 2) / task.height <= 0.892
         and box.name not in ["主战员列表", "甄别主战员", "确认", "返回"]
     ]
 
@@ -366,6 +366,7 @@ def handle_battle_member_config(task: TriggerTask):
     if not (battle_member_hint and battle_member_hint.name.strip()):
         task.log_info("检测到主战员配置页面: 当前处于出战主战员，点击出战主战员入口")
         task.click(0.315, 0.475)
+        task.sleep(4)
         return True
     task.log_info("检测到主战员配置页面: 点击进入")
     task.click(0.719, 0.914)
