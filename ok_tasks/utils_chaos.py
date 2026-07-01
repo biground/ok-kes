@@ -16,7 +16,7 @@ from utils import (
     handle_battle_failed, handle_data_collected, handle_mental_breakdown,
     handle_trauma_center, handle_explore_result, handle_treating,
     handle_treat_approve, handle_cares_tip, handle_close_button,
-    handle_expedition_unlock, handle_card_assign, handle_non_battle_page, handle_minimizemap,
+    handle_expedition_unlock, handle_card_assign, handle_non_battle_page, handle_minimizemap, handle_held_cards_page,
 )
 
 import re
@@ -108,6 +108,7 @@ def handle_memory_elimination(task: TriggerTask):
 PAGE_HANDLERS = [
     log_credit,
 
+    handle_rest,
     handle_close_button, #关闭按钮
     handle_card_assign,
     handle_confirm, #确认按钮
@@ -143,7 +144,6 @@ PAGE_HANDLERS = [
     handle_enter,
     handle_route_selection,
     handle_obtain_reward,
-    handle_rest,
     handle_view_original,
     handle_battle_failed,
     handle_data_collected,
@@ -159,4 +159,5 @@ PAGE_HANDLERS = [
     handle_memory_elimination,
     handle_skip,
     handle_event_task,
+    handle_held_cards_page,
 ]

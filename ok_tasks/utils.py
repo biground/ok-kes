@@ -842,9 +842,10 @@ def handle_rest(task: TriggerTask):
     if box and box.name == "休息":
         task.log_info("检测休息界面，点击休息")
         task.click_box(box)
-        task.sleep(0.5)
-        task.click(0.568, 0.669)
-        task.sleep(0.5)
+        task.sleep(1)
+        task.all_texts = task.ocr()  # 刷新文本框
+        # task.click(0.568, 0.669)
+        # task.sleep(0.5)
 
 #     # 德朗商店功能暂不启用
 #     if _get_config_value(task, "进入商店", False):
@@ -1097,9 +1098,18 @@ def handle_card_assign(task: TriggerTask):
 
     task.click(0.756, (chosen_lv.y + chosen_lv.height / 2) / task.height)
     task.sleep(1)
-    # task.click(0.919, 0.933)
-    # task.sleep(0.5)
+    task.click(0.919, 0.933)
+    task.sleep(1)
     return True
+
+def handle_held_cards_page(task: TriggerTask):
+    """持有卡牌页面: 检测到持有卡牌则关闭页面。"""
+    box = find_box_at_point(task, 0.500, 0.056)
+    if box and box.name == "持有卡牌":
+        task.log_info("检测到持有卡牌页面，点击关闭")
+        task.click(0.966, 0.053)
+        return True
+    return False
 
 def handle_weakness_info(task: TriggerTask):
     """怪物信息页面: 检测到弱点信息则关闭页面。"""

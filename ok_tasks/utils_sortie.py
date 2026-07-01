@@ -17,7 +17,8 @@ from utils import (
     handle_trauma_center, handle_explore_result, handle_treating,
     handle_treat_approve, handle_cares_tip, handle_close_button,
     handle_expedition_unlock, handle_card_assign, handle_non_battle_page,
-    handle_remove, handle_flash, handle_grant_flash, handle_copy, handle_weakness_info, handle_minimizemap
+    handle_remove, handle_flash, handle_grant_flash, handle_copy, handle_weakness_info, handle_minimizemap,
+    handle_held_cards_page
 )
 
 import re
@@ -211,7 +212,7 @@ def handle_battle_page(task: TriggerTask):
     cards = _hand_cards(task)
     if _get_config_value(task, '从右往左出牌', True) and (cards or card_names):
         task.log_info(f"从右往左出牌配置为True，按当前手牌数{hand_count}从大到小出牌")
-        for round_index in range(5):
+        for round_index in range(3):
             _try_all_card_keys(task, hand_count)
             task._last_card_play_count = 0
             task.sleep(5)
@@ -646,6 +647,7 @@ def handle_escape(task: TriggerTask):
 PAGE_HANDLERS = [
     log_credit,
 
+    handle_rest,
     handle_close_button, #关闭按钮
     handle_card_assign,
     handle_confirm, #确认按钮
@@ -694,7 +696,6 @@ PAGE_HANDLERS = [
     handle_enter,
     handle_route_selection,
     handle_obtain_reward,
-    handle_rest,
     handle_view_original,
     handle_battle_failed,
     handle_data_collected,
@@ -710,4 +711,5 @@ PAGE_HANDLERS = [
     handle_escape,
     handle_weakness_info,
     handle_minimizemap,
+    handle_held_cards_page,
 ]
