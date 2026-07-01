@@ -299,6 +299,7 @@ def handle_destiny_choice(task: TriggerTask):
             task.click(0.508, 0.487)
         task.sleep(2)
         task.click(0.884, 0.931)
+        task.sleep(2)
         return True
     return False
 
