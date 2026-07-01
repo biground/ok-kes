@@ -108,13 +108,18 @@ def _battle_member_boxes(task: TriggerTask):
     _excluded = {"主战员列表", "甄别主战员", "确认", "返回", "等级", "Q", "6", "支援",
                  "治愈", "守护", "核心", "60", "令", "√", "攻", "弘命", "炫心",
                  "详细信息", "配置", "同步", "全部", "``"}
-    return [
-        box for box in task.all_texts
-        if 0.100 <= (box.x + box.width / 2) / task.width <= 0.984
-        and 0.100 <= (box.y + box.height / 2) / task.height <= 0.892
-        and box.name not in _excluded
-        and len(box.name) > 1
-    ]
+    matched = []
+    for box in task.all_texts:
+        cx = (box.x + box.width / 2) / task.width
+        cy = (box.y + box.height / 2) / task.height
+        in_x = 0.100 <= cx <= 0.984
+        in_y = 0.100 <= cy <= 0.892
+        excluded = box.name in _excluded
+        task.log_debug(f"_battle_member_boxes: name=「{box.name}」 cx={cx:.4f} cy={cy:.4f} "
+                       f"in_x={in_x} in_y={in_y} excluded={excluded}")
+        if in_x and in_y and not excluded:
+            matched.append(box)
+    return matched
 
 
 def _confirm_battle_member_selection(task: TriggerTask):
@@ -370,7 +375,7 @@ def handle_battle_member_config(task: TriggerTask):
     if not (battle_member_hint and battle_member_hint.name.strip()):
         task.log_info("检测到主战员配置页面: 当前处于出战主战员，点击出战主战员入口")
         task.click(0.315, 0.475)
-        task.sleep(4)
+        task.sleep(2)
         return True
     task.log_info("检测到主战员配置页面: 点击进入")
     task.click(0.719, 0.914)
