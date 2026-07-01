@@ -17,7 +17,7 @@ from utils import (
     handle_trauma_center, handle_explore_result, handle_treating,
     handle_treat_approve, handle_cares_tip, handle_close_button,
     handle_expedition_unlock, handle_card_assign, handle_non_battle_page,
-    handle_remove, handle_flash, handle_copy, handle_weakness_info, handle_minimizemap
+    handle_remove, handle_flash, handle_grant_flash, handle_copy, handle_weakness_info, handle_minimizemap
 )
 
 import re
@@ -632,6 +632,7 @@ PAGE_HANDLERS = [
     handle_confirm, #确认按钮
     handle_remove, #移除按钮
     handle_flash, #闪光按钮
+    handle_grant_flash, #赋予闪光按钮
     handle_copy, #复制按钮
 
     handle_non_battle_page,

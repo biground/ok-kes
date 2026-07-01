@@ -621,6 +621,19 @@ def handle_flash(task: TriggerTask):
             return False
     return False
 
+def handle_grant_flash(task: TriggerTask):
+    """通用"赋予闪光"按钮。"""
+    box = find_exact_text(task, "赋予闪光")
+    if box:
+        if is_button_active(task, box):
+            task.log_info("检测到赋予闪光操作，点击赋予闪光")
+            task.click_box(box)
+            return True
+        else:
+            task.log_info("赋予闪光按钮未激活（灰色），跳过点击")
+            return False
+    return False
+
 def handle_copy(task: TriggerTask):
     """通用"复制"按钮。"""
     box = find_exact_text(task, "复制")
