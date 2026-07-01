@@ -215,7 +215,7 @@ def handle_battle_page(task: TriggerTask):
         for round_index in range(3):
             _try_all_card_keys(task, hand_count)
             task._last_card_play_count = 0
-            task.sleep(5)
+            task.sleep(4)
             task.all_texts = task.ocr()
             hand_count = _read_hand_count(task)
             if not hand_count or hand_count == 0:
