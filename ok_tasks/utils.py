@@ -837,23 +837,25 @@ def handle_select(task: TriggerTask):
 
 
 def handle_rest(task: TriggerTask):
-    """休息界面: 优先休息，然后进入德朗商店"""
-    box = find_box_at_point(task, 0.323, 0.733)
-    if box and box.name == "休息":
-        task.log_info("检测休息界面，点击休息")
-        task.click_box(box)
+    """休息界面: 检测区域内同时存在休息和免费文本则识别为休息界面。"""
+    x1, y1, x2, y2 = 0.298, 0.681, 0.420, 0.850
+    has_rest = False
+    has_free = False
+    rest_box = None
+    for b in task.all_texts:
+        cx = (b.x + b.width / 2) / task.width
+        cy = (b.y + b.height / 2) / task.height
+        if x1 <= cx <= x2 and y1 <= cy <= y2:
+            if b.name == "休息":
+                has_rest = True
+                rest_box = b
+            if "免费" in b.name:
+                has_free = True
+    if has_rest and has_free and rest_box:
+        task.log_info("检测到休息界面，点击休息")
+        task.click_box(rest_box)
         task.sleep(1)
-        task.all_texts = task.ocr()  # 刷新文本框
-        # task.click(0.568, 0.669)
-        # task.sleep(0.5)
-
-#     # 德朗商店功能暂不启用
-#     if _get_config_value(task, "进入商店", False):
-#         shop_box = find_box_at_point(task, 0.366, 0.133)
-#         if shop_box and shop_box.name == "德朗商店":
-#             task.log_info("检测休息界面，发现德朗商店，进入")
-#             task.click_box(shop_box)
-#             return True
+        return True
     return False
 
 
