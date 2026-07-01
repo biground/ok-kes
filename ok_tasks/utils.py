@@ -597,8 +597,8 @@ def handle_confirm(task: TriggerTask):
 
 def handle_remove(task: TriggerTask):
     """通用"移除"按钮。"""
-    box = find_exact_text(task, "移除")
-    if box:
+    box = find_box_at_point(task, 0.945, 0.918)
+    if box and box.name == "移除":
         if is_button_active(task, box):
             task.log_info("检测到移除操作，点击移除")
             task.click_box(box)
@@ -610,8 +610,8 @@ def handle_remove(task: TriggerTask):
 
 def handle_flash(task: TriggerTask):
     """通用"闪光"按钮。"""
-    box = find_exact_text(task, "闪光")
-    if box:
+    box = find_box_at_point(task, 0.945, 0.918)
+    if box and box.name == "闪光":
         if is_button_active(task, box):
             task.log_info("检测到闪光操作，点击闪光")
             task.click_box(box)
@@ -623,8 +623,8 @@ def handle_flash(task: TriggerTask):
 
 def handle_grant_flash(task: TriggerTask):
     """通用"赋予闪光"按钮。"""
-    box = find_exact_text(task, "赋予闪光")
-    if box:
+    box = find_box_at_point(task, 0.945, 0.918)
+    if box and box.name == "赋予闪光":
         if is_button_active(task, box):
             task.log_info("检测到赋予闪光操作，点击赋予闪光")
             task.click_box(box)
@@ -636,8 +636,8 @@ def handle_grant_flash(task: TriggerTask):
 
 def handle_copy(task: TriggerTask):
     """通用"复制"按钮。"""
-    box = find_exact_text(task, "复制")
-    if box:
+    box = find_box_at_point(task, 0.945, 0.918)
+    if box and box.name == "复制":
         if is_button_active(task, box):
             task.log_info("检测到复制操作，点击复制")
             task.click_box(box)
@@ -811,10 +811,14 @@ def handle_leave(task: TriggerTask):
     """离开按钮。"""
     box = find_box_at_point(task, 0.945, 0.918)
     if box and box.name == "离开":
-        task.log_info("检测到离开按钮，点击离开")
-        task.click_box(box)
-        task.sleep(1)
-        return True
+        if is_button_active(task, box):
+            task.log_info("检测到离开按钮，点击离开")
+            task.click_box(box)
+            task.sleep(1)
+            return True
+        else:
+            task.log_info("离开按钮未激活（灰色），跳过点击")
+            return False
     return False
 
 

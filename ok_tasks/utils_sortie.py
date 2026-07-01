@@ -634,6 +634,7 @@ PAGE_HANDLERS = [
     handle_flash, #闪光按钮
     handle_grant_flash, #赋予闪光按钮
     handle_copy, #复制按钮
+    handle_leave, #离开按钮
 
     handle_non_battle_page,
     handle_battle_crash,
@@ -684,7 +685,6 @@ PAGE_HANDLERS = [
     handle_explore_result,
     handle_expedition_unlock,
     handle_cares_tip,
-    handle_leave,
     handle_skip,
     handle_event_task,
     handle_escape,
