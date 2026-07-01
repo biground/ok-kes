@@ -26,6 +26,7 @@ class ChaosMode(TriggerTask):
         self.default_config['复制卡牌列表'] = ["展开极光", "剑雨", "缕光芒", "一缕光芒", "万众英雄"]
         # 路线节点优先级 (列表), 越靠前优先级越高
         self.default_config['优先使用金币治疗'] = True
+        self.default_config['治疗崩溃'] = True
         self.default_config['进入商店'] = False
         self.default_config['路线优先级'] = ["休息", "事件", "小怪", "boss"]
 

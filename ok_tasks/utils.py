@@ -942,11 +942,15 @@ def handle_data_collected(task: TriggerTask):
 
 
 def handle_mental_breakdown(task: TriggerTask):
-    """精神崩溃发生页面: 前往创伤中心。"""
+    """精神崩溃发生页面: 根据配置决定是否治疗崩溃。"""
     box = find_box_at_point(task, 0.496, 0.186)
     if box and box.name == "精神崩溃发生":
-        task.log_info("检测到精神崩溃发生，去创伤中心")
-        task.click(0.706, 0.915)
+        if _get_config_value(task, '治疗崩溃', True):
+            task.log_info("检测到精神崩溃发生，去创伤中心治疗")
+            task.click(0.706, 0.915)
+        else:
+            task.log_info("检测到精神崩溃发生，治疗崩溃配置为False，关闭页面")
+            task.click(0.889, 0.919)
         return True
     return False
 
