@@ -12,7 +12,7 @@ from utils import (
     handle_flash_card, handle_copy_card_pick, handle_convert_card,
     handle_negotiation, handle_continue, handle_confirm, handle_enter,
     handle_event_task, handle_route_selection, handle_obtain_reward,
-    handle_leave, handle_rest, handle_view_original, handle_weakness_info,
+    handle_leave, handle_select, handle_rest, handle_view_original, handle_weakness_info,
     handle_battle_failed, handle_data_collected, handle_mental_breakdown,
     handle_trauma_center, handle_explore_result, handle_treating,
     handle_treat_approve, handle_cares_tip, handle_close_button,
@@ -116,6 +116,7 @@ PAGE_HANDLERS = [
     handle_grant_flash, #赋予闪光按钮
     handle_copy, #复制按钮
     handle_leave, #离开按钮
+    handle_select, #选择按钮
 
     handle_minimizemap,
     handle_weakness_info,

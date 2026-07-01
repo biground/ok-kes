@@ -12,7 +12,7 @@ from utils import (
     handle_flash_card, handle_copy_card_pick, handle_convert_card,
     handle_negotiation, handle_continue, handle_confirm, handle_enter,
     handle_event_task, handle_route_selection, handle_obtain_reward,
-    handle_leave, handle_rest, handle_view_original,
+    handle_leave, handle_select, handle_rest, handle_view_original,
     handle_battle_failed, handle_data_collected, handle_mental_breakdown,
     handle_trauma_center, handle_explore_result, handle_treating,
     handle_treat_approve, handle_cares_tip, handle_close_button,
@@ -209,6 +209,25 @@ def handle_battle_page(task: TriggerTask):
             return False
     card_names = _hand_card_names(task)
     cards = _hand_cards(task)
+    if _get_config_value(task, '从右往左出牌', True) and (cards or card_names):
+        task.log_info(f"从右往左出牌配置为True，按当前手牌数{hand_count}从大到小出牌")
+        for round_index in range(5):
+            _try_all_card_keys(task, hand_count)
+            task._last_card_play_count = 0
+            task.sleep(5)
+            task.all_texts = task.ocr()
+            hand_count = _read_hand_count(task)
+            if not hand_count or hand_count == 0:
+                task.log_info("出牌后无手牌，按E")
+                task.send_key("e")
+                break
+            card_names = _hand_card_names(task)
+            cards = _hand_cards(task)
+            if not (cards or card_names):
+                task.log_info("出牌后无手牌，结束循环")
+                break
+            task.log_info(f"第{round_index + 1}轮出牌后仍有手牌{hand_count}张，继续下一轮")
+        return True
     if not cards:
         if card_names:
             task.log_info(f"识别到{len(card_names)}张手牌但没有识别到按键，按当前手牌数{hand_count}从大到小尝试")
@@ -635,6 +654,7 @@ PAGE_HANDLERS = [
     handle_grant_flash, #赋予闪光按钮
     handle_copy, #复制按钮
     handle_leave, #离开按钮
+    handle_select, #选择按钮
 
     handle_non_battle_page,
     handle_battle_crash,

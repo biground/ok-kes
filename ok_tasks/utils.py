@@ -463,8 +463,8 @@ def handle_equipment(task: TriggerTask):
                 key=lambda b: b.y
             )
             if lv_texts:
-                chosen = random.choice(lv_texts)
-                task.log_info(f"随机选择主战员: 位置 y={chosen.y}")
+                chosen = lv_texts[0]
+                task.log_info(f"选择最上方的主战员: 位置 y={chosen.y}")
                 task.click(0.756, (chosen.y + chosen.height / 2) / task.height)
                 task.sleep(1)
                 # task.click(0.884, 0.931)
@@ -792,7 +792,7 @@ def handle_route_selection(task: TriggerTask):
     for node_key, node_type in sorted_nodes:
         task.log_info(f"点击节点{node_key[-1]} (类型: {node_type})")
         task.click(*click_points[node_key])
-        task.sleep(1)
+        task.sleep(0.5)
 
     return True
 
@@ -818,6 +818,20 @@ def handle_leave(task: TriggerTask):
             return True
         else:
             task.log_info("离开按钮未激活（灰色），跳过点击")
+            return False
+    return False
+
+def handle_select(task: TriggerTask):
+    """通用"选择"按钮。"""
+    box = find_box_at_point(task, 0.945, 0.918)
+    if box and box.name == "选择":
+        if is_button_active(task, box):
+            task.log_info("检测到选择按钮，点击选择")
+            task.click_box(box)
+            task.sleep(1)
+            return True
+        else:
+            task.log_info("选择按钮未激活（灰色），跳过点击")
             return False
     return False
 
