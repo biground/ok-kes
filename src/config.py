@@ -3,7 +3,7 @@ import os
 import numpy as np
 from ok import ConfigOption
 
-version = "v1.0.19"
+version = "v1.0.20"
 #不需要修改version, Github Action打包会自动修改
 
 key_config_option = ConfigOption('Game Hotkey Config', { #全局配置示例
@@ -88,8 +88,9 @@ config = {
     },
     'supported_resolution': {
         'ratio': '16:9', #支持的游戏分辨率
-        'min_size': (1920, 1080), #强制最低1080p，确保缩放后坐标精确匹配
+        'min_size': (3840, 2160), #设4K，当前任何低于4K的分辨率都会触发try_resize_to缩放到1920x1080
         'resize_to': [(1920, 1080)], #强制缩放至1920x1080, 确保所有坐标精确匹配
+        'force_ratio': True, #不弹分辨率报错弹窗，由resize_to处理
     },
     'links': { # 关于里显示的链接, 可选
             'default': {
