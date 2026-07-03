@@ -679,7 +679,7 @@ def handle_equipment_recast(task: TriggerTask):
     """装备重铸页面: 点击确认重铸。"""
     box = find_box_at_point(task, 0.501, 0.128)
     if box and "装备重铸" in box.name:
-        task.log_info("检测到装备重铸页面，点击确认重铸")
+        task.log_info("检测到装备重铸页面，点击跳过")
         task.click(0.749, 0.932)
         task.sleep(1)
         return True
