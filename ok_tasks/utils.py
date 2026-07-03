@@ -1003,11 +1003,13 @@ def handle_data_collected(task: TriggerTask):
     if box and box.name == "存储数据收集完成":
         if not _get_config_value(task, '保留存档', False):
             task.log_info("保留存档配置为False，删除存档")
-            for x, y in [(0.337, 0.807), (0.652, 0.807), (0.970, 0.811)]:
-                task.click(x, y)
-                task.sleep(1)
-                task.click(0.659, 0.662)
-                task.sleep(1)
+            for feature_name in ["deletecards", "deletecards2", "deletecards3"]:
+                features = task.find_feature(feature_name=feature_name)
+                if features:
+                    task.log_info(f"找到{feature_name}特征，点击删除")
+                    task.click_box(features[0])
+                    task.sleep(1)
+                    return True
         task.log_info("检测到存储数据收集完成，下一步")
         task.click(0.905, 0.917)
         return True
