@@ -74,7 +74,9 @@ def _hand_cards(task: TriggerTask):
 
 
 def _try_all_card_keys(task: TriggerTask, count):
-    """从当前手牌数向下尝试所有手牌按键，兜底处理按键漏识别或识别错误。"""
+    """从当前手牌数向下尝试所有手牌按键，兜底处理按键漏识别或识别错误。
+    如果按键未能减少手牌，则尝试点击手牌区域对应的卡牌位置。"""
+    task.log_info(f"_try_all_card_keys: 手牌数={count}，发送按键 1-{min(count, 9)}")
     for index in range(min(count, 9), 0, -1):
         task.send_key(str(index))
         task.sleep(0.2)
@@ -198,7 +200,8 @@ def handle_boss_selection(task: TriggerTask):
 
 
 def handle_battle_page(task: TriggerTask):
-    """战斗页面: 按优先级出牌；卡牌卡住或按键识别异常时按当前手牌数从大到小兜底尝试。"""
+    """战斗页面: 按优先级出牌；卡牌卡住或按键识别异常时按当前手牌数从大到小兜底尝试。
+    如果按键未能减少手牌，则通过点击手牌对应位置应急出牌。"""
     hand_count = _read_hand_count(task)
     if hand_count is None:
         return False
@@ -213,6 +216,7 @@ def handle_battle_page(task: TriggerTask):
     if (cards or card_names):
         task.log_info(f"从右往左出牌配置为True，按当前手牌数{hand_count}从大到小出牌")
         for round_index in range(3):
+            before_count = hand_count
             _try_all_card_keys(task, hand_count)
             task._last_card_play_count = 0
             task.sleep(4)
@@ -227,7 +231,32 @@ def handle_battle_page(task: TriggerTask):
             if not (cards or card_names):
                 task.log_info("出牌后无手牌，结束循环")
                 break
-            task.log_info(f"第{round_index + 1}轮出牌后仍有手牌{hand_count}张，继续下一轮")
+            # 如果按键一轮后手牌数没变，说明按键未生效，尝试点击手牌位置出牌
+            if hand_count == before_count:
+                task.log_info(f"按键后手牌数未减少({hand_count})，按键可能未送达游戏，尝试点击出牌")
+                # 计算手牌区域内的卡牌点击位置，从右往左点击
+                hand_area_x_start, hand_area_x_end = 0.159, 0.836
+                hand_area_y = 0.757  # 手牌区域垂直中点
+                # 以手牌数为间隔，从右往左生成点击点
+                for i in range(min(hand_count, 5)):
+                    x = hand_area_x_end - (hand_area_x_end - hand_area_x_start) * i / max(hand_count, 1)
+                    task.log_info(f"点击手牌位置 x={x:.3f}, y={hand_area_y}")
+                    task.click(x, hand_area_y)
+                    task.sleep(0.3)
+                task.sleep(3)
+                task.all_texts = task.ocr()
+                new_hand_count = _read_hand_count(task)
+                if new_hand_count and new_hand_count < hand_count:
+                    task.log_info(f"点击出牌成功，手牌从{hand_count}减至{new_hand_count}")
+                    hand_count = new_hand_count
+                    if hand_count == 0:
+                        task.send_key("e")
+                        break
+                else:
+                    task.log_info(f"点击后手牌仍未减少({new_hand_count})，战斗可能已结束")
+                    break
+            else:
+                task.log_info(f"第{round_index + 1}轮出牌后仍有手牌{hand_count}张，继续下一轮")
         return True
     task.send_key("e")
     return True
