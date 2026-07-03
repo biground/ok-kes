@@ -78,9 +78,9 @@ def _try_all_card_keys(task: TriggerTask, count):
     task.log_info(f"_try_all_card_keys: 手牌数={count}，发送按键 {min(count, 9)} 到 1")
     for index in range(min(count, 9), 0, -1):
         task.send_key(str(index))
-        task.sleep(0.2)
-        task.send_key("enter")
         task.sleep(0.5)
+        task.send_key("enter")
+        task.sleep(1)
 
 
 def _read_hand_count(task: TriggerTask):
