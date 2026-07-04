@@ -20,7 +20,7 @@ python -m ok.update.inline_ok_requirements
 ### 2. 执行 PyInstaller 打包
 
 ```bash
-pyinstaller --onefile --noconsole --uac-admin --runtime-tmpdir "C:\Temp\ok_kes" --name "卡厄思自动化工具v1.0.3" --icon icons/icon.ico ^
+pyinstaller --onefile --noconsole --uac-admin --runtime-tmpdir "C:\Temp\ok_kes" --name "卡厄思自动化工具v1.2.0" --icon icons/icon.ico ^
   --add-data assets;assets ^
   --add-data i18n;i18n ^
   --add-data ok_tasks;ok_tasks ^
@@ -45,12 +45,12 @@ pyinstaller --onefile --noconsole --uac-admin --runtime-tmpdir "C:\Temp\ok_kes" 
 
 ```bash
 rmdir /s /q build
-del "卡厄思自动化工具v1.0.3.spec"
+del "卡厄思自动化工具v1.2.0.spec"
 ```
 
 ### 4. 产物
 
-位于 `dist\卡厄思自动化工具v1.0.3.exe`，约 265 MB。
+位于 `dist\卡厄思自动化工具v1.2.0.exe`，约 265 MB。
 
 ## 关键说明
 
