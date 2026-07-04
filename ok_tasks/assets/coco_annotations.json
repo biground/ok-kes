@@ -41,6 +41,18 @@
             "file_name": "images/0.png",
             "width": 1920,
             "height": 1080
+        },
+        {
+            "id": 40,
+            "file_name": "images/1.png",
+            "width": 1920,
+            "height": 1080
+        },
+        {
+            "id": 41,
+            "file_name": "images/0.png",
+            "width": 1920,
+            "height": 1080
         }
     ],
     "annotations": [
@@ -160,6 +172,32 @@
             ],
             "area": 3300,
             "iscrowd": 0
+        },
+        {
+            "id": 10,
+            "image_id": 40,
+            "category_id": 10,
+            "bbox": [
+                1636,
+                864,
+                151,
+                147
+            ],
+            "area": 22197,
+            "iscrowd": 0
+        },
+        {
+            "id": 11,
+            "image_id": 41,
+            "category_id": 11,
+            "bbox": [
+                1205,
+                481,
+                63,
+                70
+            ],
+            "area": 4410,
+            "iscrowd": 0
         }
     ],
     "categories": [
@@ -206,6 +244,16 @@
         {
             "id": 9,
             "name": "taskopen",
+            "supercategory": ""
+        },
+        {
+            "id": 10,
+            "name": "finishturn",
+            "supercategory": ""
+        },
+        {
+            "id": 11,
+            "name": "treasure",
             "supercategory": ""
         }
     ]
