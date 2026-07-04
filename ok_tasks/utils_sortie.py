@@ -255,6 +255,11 @@ def handle_get_card(task: TriggerTask):
             task.sleep(0.5)
             task.click(0.912, 0.931)
             return True
+    if _get_config_value(task, '跳过非优先级卡牌', True):
+        task.log_info("获得卡牌: 未命中优先级，跳过非优先级卡牌")
+        task.click(0.749, 0.931)
+        task.sleep(1)
+        return True
     chosen = random.choice(cards)
     task.log_info(f"获得卡牌: 随机选择「{chosen['name']}」")
     task.click(chosen["x"], chosen["y"])
