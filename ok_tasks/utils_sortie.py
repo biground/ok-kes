@@ -287,15 +287,36 @@ def handle_battle_page(task: TriggerTask):
                     if "极光" in matched["name"]:
                         task.log_info(f"卡牌「{matched['name']}」包含极光，额外等待2秒")
                         task.sleep(2)
+                    elif "万众英雄" in matched["name"]:
+                        task.log_info(f"卡牌「{matched['name']}」包含万众英雄，额外等待2秒")
+                        task.sleep(2)
                     return True
+
+        # 兜底策略：检测连续三轮有相同卡牌名未打出，执行_try_all_card_keys
+        current_names = {c["name"] for c in cards if c["key"] is not None}
+        if not hasattr(task, '_card_stuck_round'):
+            task._card_stuck_round = 0
+            task._last_card_names = set()
+        if task._last_card_names and task._last_card_names == current_names:
+            task._card_stuck_round += 1
+            task.log_info(f"卡牌名连续{task._card_stuck_round}轮未变化，当前手牌: {current_names}")
+            if task._card_stuck_round >= 3:
+                task.log_info(f"卡牌名连续3轮未变化，执行兜底出牌")
+                task._card_stuck_round = 0
+                task._last_card_names = set()
+                _try_all_card_keys(task, hand_count)
+                return True
+        else:
+            task._card_stuck_round = 0
+            task._last_card_names = current_names
 
         # 未命中优先级，兜底从大到小出牌
         task.log_info(f"未命中出牌优先级，按当前手牌数{hand_count}从大到小兜底出牌")
+        task._card_stuck_round = 0
+        task._last_card_names = set()
         _try_all_card_keys(task, hand_count)
         return True
     else:
-        # task.log_info(f"防止意外弃牌，当前手牌数不为0但未识别到手牌，尝试按当前手牌数{hand_count}从大到小出牌")
-        # _try_all_card_keys(task, hand_count)
         if task.find_feature(feature_name="finishturn"):
             task.log_info("检测到finishturn特征，按E结束回合")
             task.send_key("e")
