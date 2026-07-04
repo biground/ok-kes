@@ -1,4 +1,4 @@
-from ok import TriggerTask
+from ok import TriggerTask, og
 
 import utils_chaos
 from opencc import OpenCC
@@ -30,6 +30,14 @@ class ChaosMode(TriggerTask):
         self.default_config['进入商店'] = False
         self.default_config['保留存档'] = False
         self.default_config['路线优先级'] = ["休息", "事件", "小怪", "boss"]
+
+    def enable(self):
+        """开启卡厄思模式时自动禁用出击模式。"""
+        from SortieMode import SortieMode
+        sortie = og.executor.get_task_by_class(SortieMode)
+        if sortie and sortie.enabled:
+            sortie.disable()
+        super().enable()
 
     def _ocr_and_simplify(self):
         """执行OCR并将所有识别文本转简体。"""

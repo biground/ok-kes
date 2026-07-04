@@ -1,4 +1,4 @@
-from ok import TriggerTask
+from ok import TriggerTask, og
 
 import utils_sortie
 from opencc import OpenCC
@@ -32,6 +32,14 @@ class SortieMode(TriggerTask):
         self.default_config["任务优先级"] = ["选取随机3条命运","信用点增加", "移除"]
         self.default_config["拉黑主战员"] = ["黛安娜", "阿黛尔海特"]
         # self.default_config["从右往左出牌"] = True
+
+    def enable(self):
+        """开启出击模式时自动禁用卡厄思模式。"""
+        from ChaosMode import ChaosMode
+        chaos = og.executor.get_task_by_class(ChaosMode)
+        if chaos and chaos.enabled:
+            chaos.disable()
+        super().enable()
 
     def _ocr_and_simplify(self):
         """执行OCR并将所有识别文本转简体。"""
