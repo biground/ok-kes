@@ -54,22 +54,81 @@ def _card_key(text):
 
 
 def _hand_card_names(task: TriggerTask):
-    """读取手牌区域内的卡牌名，允许没有识别到按键。"""
+    """读取手牌区域内的卡牌名，排除按键和"攻击""强化""技能"。"""
     x1, y1, x2, y2 = 0.159, 0.683, 0.836, 0.831
+    exclude_keywords = ["攻击", "强化", "技能"]
     boxes = [b for b in task.all_texts
              if x1 <= (b.x + b.width / 2) / task.width <= x2
              and y1 <= (b.y + b.height / 2) / task.height <= y2]
-    return [b for b in boxes if not _card_key(b.name) and len(b.name) > 1 and b.name not in ["攻击", "技能"]]
+    return [b for b in boxes
+            if not _card_key(b.name)
+            and len(b.name) > 1
+            and not any(kw in b.name for kw in exclude_keywords)]
 
 
 def _hand_cards(task: TriggerTask):
-    keys = [(b.x / task.width, _card_key(b.name)) for b in task.all_texts if _card_key(b.name)]
+    """识别手牌，返回按位置排序的卡牌名与按键列表，按键缺失时根据手牌数和间距推断。"""
+    # 按键：包含数字的
+    keys = [(b.x / task.width, b.y / task.height, _card_key(b.name)) for b in task.all_texts if _card_key(b.name)]
+    keys.sort(key=lambda x: x[0])
+
+    # 卡牌名
+    card_names = _hand_card_names(task)
+    card_names.sort(key=lambda b: b.x)
+
+    # 读取手牌数
+    hand_count = _read_hand_count(task)
+
+    # 配对：每个卡牌匹配其左上方最近的未使用按键
+    used_keys = set()
     cards = []
-    for name_box in _hand_card_names(task):
-        x = name_box.x / task.width
-        key = max([(kx, k) for kx, k in keys if kx <= x + 0.04], default=(None, None))[1]
-        if key:
-            cards.append({"name": name_box.name, "key": key, "x": x})
+    for name_box in card_names:
+        cx = name_box.x / task.width
+        cy = name_box.y / task.height
+
+        candidates = []
+        for kx, ky, k in keys:
+            if k in used_keys:
+                continue
+            # 垂直：按键在卡牌名上方 0.03~0.06
+            if not (cy - 0.06 <= ky <= cy - 0.03):
+                continue
+            # 水平：按键在卡牌名左方，距离不超过 0.025
+            if not (cx - 0.025 <= kx <= cx + 0.01):
+                continue
+            candidates.append((kx, ky, k))
+
+        if candidates:
+            best = min(candidates, key=lambda x: cx - x[0])
+            used_keys.add(best[2])
+            cards.append({"name": name_box.name, "key": best[2], "x": cx})
+        else:
+            cards.append({"name": name_box.name, "key": None, "x": cx})
+
+    # 推断缺失的按键
+    if hand_count is not None and len(cards) < hand_count:
+        # 手牌数 > 识别到的卡牌数，按位置顺序依次分配
+        sorted_cards = sorted(enumerate(cards), key=lambda x: x[1]["x"])
+        next_key = 1
+        for idx, c in sorted_cards:
+            if c["key"] is not None:
+                next_key = int(c["key"]) + 1
+            else:
+                c["key"] = str(next_key)
+                next_key += 1
+    elif hand_count is not None and hand_count == len(cards):
+        # 手牌数与识别数一致，直接用顺序分配
+        for i, c in enumerate(cards):
+            expected = i + 1
+            if c["key"] is None:
+                c["key"] = str(expected)
+    else:
+        # 无法读取手牌数，用简单推断
+        for i, c in enumerate(cards):
+            if c["key"] is None:
+                c["key"] = str(i + 1)
+
+    task.log_info(f"_hand_cards: 识别到 {len(cards)} 张手牌: {[(c['name'], c['key']) for c in cards]}")
     return cards
 
 
@@ -199,7 +258,7 @@ def handle_boss_selection(task: TriggerTask):
 
 
 def handle_battle_page(task: TriggerTask):
-    """战斗页面: 按优先级出牌；卡牌卡住或按键识别异常时按当前手牌数从大到小兜底尝试。"""
+    """战斗页面: 优先按"出牌优先级"配置出牌；找不到优先级中的牌时按当前手牌数从大到小兜底尝试。"""
     hand_count = _read_hand_count(task)
     if hand_count is None:
         return False
@@ -209,26 +268,27 @@ def handle_battle_page(task: TriggerTask):
         hand_count = _read_hand_count(task)
         if hand_count is None:
             return False
+
     card_names = _hand_card_names(task)
     cards = _hand_cards(task)
+
     if (cards or card_names):
-        task.log_info(f"从右往左出牌配置为True，按当前手牌数{hand_count}从大到小出牌")
-        # for round_index in range(3):
+        # 检查"出牌优先级"配置
+        play_priority = _get_config_value(task, "出牌优先级", [])
+        if play_priority and cards:
+            for pri_name in play_priority:
+                matched = next((c for c in cards if pri_name and pri_name in c["name"] and c["key"] is not None), None)
+                if matched:
+                    task.log_info(f"出牌优先级匹配: 卡牌「{matched['name']}」→ 按键 {matched['key']}")
+                    task.send_key(matched['key'])
+                    task.sleep(1)
+                    task.send_key("enter")
+                    task.sleep(2)
+                    return True
+
+        # 未命中优先级，兜底从大到小出牌
+        task.log_info(f"未命中出牌优先级，按当前手牌数{hand_count}从大到小兜底出牌")
         _try_all_card_keys(task, hand_count)
-        task._last_card_play_count = 0
-        task.sleep(4)
-        # task.all_texts = task.ocr()
-        # hand_count = _read_hand_count(task)
-        # if not hand_count or hand_count == 0:
-        #     task.log_info("出牌后无手牌，按E")
-        #     task.send_key("e")
-        #     # break
-        # card_names = _hand_card_names(task)
-        # cards = _hand_cards(task)
-        # if not (cards or card_names):
-        #     task.log_info("出牌后无手牌，结束循环")
-            # break
-        # task.log_info(f"第{round_index + 1}轮出牌后仍有手牌{hand_count}张，继续下一轮")
         return True
     else:
         task.log_info(f"防止意外弃牌，当前手牌数不为0但未识别到手牌，尝试按当前手牌数{hand_count}从大到小出牌")
@@ -236,7 +296,6 @@ def handle_battle_page(task: TriggerTask):
         task.send_key("e")
         task.sleep(1)
         return True
-    # task.send_key("e")
     return True
 
 
