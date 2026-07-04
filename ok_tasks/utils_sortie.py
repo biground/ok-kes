@@ -273,6 +273,24 @@ def handle_battle_page(task: TriggerTask):
     cards = _hand_cards(task)
 
     if (cards or card_names):
+        # 兜底策略：优先检测连续三轮卡牌名集合无变化（说明优先级匹配的牌打不出去）
+        current_names = {c["name"] for c in cards if c["key"] is not None}
+        if not hasattr(task, '_card_stuck_round'):
+            task._card_stuck_round = 0
+            task._last_card_names = set()
+        if task._last_card_names and task._last_card_names == current_names:
+            task._card_stuck_round += 1
+            task.log_info(f"卡牌名连续{task._card_stuck_round}轮未变化，当前手牌: {current_names}")
+            if task._card_stuck_round >= 3:
+                task.log_info(f"卡牌名连续3轮未变化，执行兜底出牌")
+                task._card_stuck_round = 0
+                task._last_card_names = set()
+                _try_all_card_keys(task, hand_count)
+                return True
+        else:
+            task._card_stuck_round = 0
+            task._last_card_names = current_names
+
         # 检查"出牌优先级"配置
         play_priority = _get_config_value(task, "出牌优先级", [])
         if play_priority and cards:
@@ -292,28 +310,8 @@ def handle_battle_page(task: TriggerTask):
                         task.sleep(2)
                     return True
 
-        # 兜底策略：检测连续三轮有相同卡牌名未打出，执行_try_all_card_keys
-        current_names = {c["name"] for c in cards if c["key"] is not None}
-        if not hasattr(task, '_card_stuck_round'):
-            task._card_stuck_round = 0
-            task._last_card_names = set()
-        if task._last_card_names and task._last_card_names == current_names:
-            task._card_stuck_round += 1
-            task.log_info(f"卡牌名连续{task._card_stuck_round}轮未变化，当前手牌: {current_names}")
-            if task._card_stuck_round >= 3:
-                task.log_info(f"卡牌名连续3轮未变化，执行兜底出牌")
-                task._card_stuck_round = 0
-                task._last_card_names = set()
-                _try_all_card_keys(task, hand_count)
-                return True
-        else:
-            task._card_stuck_round = 0
-            task._last_card_names = current_names
-
         # 未命中优先级，兜底从大到小出牌
         task.log_info(f"未命中出牌优先级，按当前手牌数{hand_count}从大到小兜底出牌")
-        task._card_stuck_round = 0
-        task._last_card_names = set()
         _try_all_card_keys(task, hand_count)
         return True
     else:
