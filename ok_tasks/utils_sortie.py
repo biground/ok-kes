@@ -262,11 +262,11 @@ def handle_battle_page(task: TriggerTask):
     hand_count = _read_hand_count(task)
     if hand_count is None:
         return False
-    if hand_count == 0:
-        finishturn_box = task.box_of_screen(0.844, 0.782, 0.998, 0.990)
-        if not task.find_feature(feature_name="finishturn", box=finishturn_box):
-            task.log_info("手牌数为0且未检测到finishturn特征，return True等待下一帧")
-            return True
+
+    finishturn_box = task.box_of_screen(0.844, 0.782, 0.998, 0.990)
+    if not task.find_feature(feature_name="finishturn", box=finishturn_box):
+        task.log_info("未检测到finishturn特征，return True等待下一帧")
+        return True
 
     card_names = _hand_card_names(task)
     cards = _hand_cards(task)
