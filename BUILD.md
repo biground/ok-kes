@@ -2,6 +2,8 @@
 
 ## 前置条件
 
+本项目的打包环境为 conda 的 `oknikke` 环境（Python 3.12），使用该环境的 python 和 pip 执行打包命令。
+
 ```bash
 pip install -r requirements.txt
 pip install pyinstaller
@@ -20,7 +22,7 @@ python -m ok.update.inline_ok_requirements
 ### 2. 执行 PyInstaller 打包
 
 ```bash
-pyinstaller --onefile --noconsole --uac-admin --runtime-tmpdir "C:\Temp\ok_kes" --name "卡厄思自动化工具v1.2.0" --icon icons/icon.ico ^
+pyinstaller --onefile --noconsole --uac-admin --runtime-tmpdir "C:\Temp\ok_kes" --name "卡厄思自动化工具v1.2.2" --icon icons/icon.ico ^
   --add-data assets;assets ^
   --add-data i18n;i18n ^
   --add-data ok_tasks;ok_tasks ^
@@ -45,12 +47,12 @@ pyinstaller --onefile --noconsole --uac-admin --runtime-tmpdir "C:\Temp\ok_kes" 
 
 ```bash
 rmdir /s /q build
-del "卡厄思自动化工具v1.2.0.spec"
+del "卡厄思自动化工具v1.2.2.spec"
 ```
 
 ### 4. 产物
 
-位于 `dist\卡厄思自动化工具v1.2.0.exe`，约 265 MB。
+位于 `dist\卡厄思自动化工具v1.2.2.exe`，约 265 MB。
 
 ## 关键说明
 
