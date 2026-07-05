@@ -104,6 +104,23 @@ def handle_memory_elimination(task: TriggerTask):
     return False
 
 
+def handle_chaos_craft(task: TriggerTask):
+    """卡厄思合成页面: 检测"卡厄思合成"(0.774,0.925)或"免费合成"(0.563,0.922)按钮，点击并等待。"""
+    box = find_box_at_point(task, 0.774, 0.925)
+    if box and "卡厄思合成" in box.name:
+        task.log_info(f"检测到卡厄思合成页面，点击「{box.name}」")
+        task.click_box(box)
+        task.sleep(2)
+        return True
+    box = find_box_at_point(task, 0.563, 0.922)
+    if box and "免费合成" in box.name:
+        task.log_info(f"检测到卡厄思合成页面，点击「{box.name}」")
+        task.click_box(box)
+        task.sleep(2)
+        return True
+    return False
+
+
 # 卡厄思模式 PAGE_HANDLERS
 PAGE_HANDLERS = [
     log_credit,
@@ -161,6 +178,7 @@ PAGE_HANDLERS = [
     handle_expedition_unlock,
     handle_cares_tip,
     handle_memory_elimination,
+    handle_chaos_craft,
     handle_skip,
     handle_event_task,
     handle_held_cards_page,
