@@ -685,6 +685,7 @@ def handle_escape(task: TriggerTask):
 PAGE_HANDLERS = [
     log_credit,
 
+    handle_ether_supply,
     handle_close_button, #关闭按钮
     handle_card_assign,
     handle_confirm, #确认按钮
@@ -710,7 +711,6 @@ PAGE_HANDLERS = [
     handle_weakness_info,
     handle_battle_page,
     handle_close_page,
-    handle_ether_supply,
     # handle_center_confirm,
     handle_settlement,
     handle_destiny_choice,
