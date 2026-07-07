@@ -75,13 +75,13 @@ def _is_valid_card_name(name):
 
 
 def _card_has_type_below(task: TriggerTask, box):
-    """判断文本框下方是否有'攻击/强化/技能'类型标签（卡牌名特征）。"""
+    """判断文本框下方是否有'攻击/强化/技能/咒术'类型标签（卡牌名特征）。"""
     box_bottom_y = (box.y + box.height) / task.height
     for b in task.all_texts:
         by = (b.y + b.height / 2) / task.height
         dy = by - box_bottom_y
         if -0.005 <= dy <= 0.040:
-            if "攻击" in b.name or "强化" in b.name or "技能" in b.name or "技" in b.name:
+            if "攻击" in b.name or "强化" in b.name or "技能" in b.name or "技" in b.name or "咒术" in b.name:
                 return True
     return False
 
