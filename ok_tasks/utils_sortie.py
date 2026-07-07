@@ -27,6 +27,22 @@ import random
 import cv2
 
 
+def _edit_distance(s1, s2):
+    """计算两个字符串的编辑距离（Levenshtein距离）。"""
+    if len(s1) < len(s2):
+        return _edit_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            cost = 0 if c1 == c2 else 1
+            curr_row.append(min(curr_row[j] + 1, prev_row[j + 1] + 1, prev_row[j] + cost))
+        prev_row = curr_row
+    return prev_row[-1]
+
+
 # ------------------------- 出击模式独有工具 -------------------------
 
 def _get_member_priority(task: TriggerTask):
@@ -56,16 +72,16 @@ def _card_key(text):
 
 
 def _hand_card_names(task: TriggerTask):
-    """读取手牌区域内的卡牌名，排除按键和"攻击""强化""技能"。"""
+    """读取手牌区域内的卡牌名，排除按键和与"攻击""强化""技能"编辑距离<=1的文本。"""
     x1, y1, x2, y2 = 0.159, 0.683, 0.836, 0.831
-    exclude_keywords = ["攻击", "强化", "技能"]
+    exclude_keywords = ["攻击", "强化", "技能", "咒术", "状态异常"]
     boxes = [b for b in task.all_texts
              if x1 <= (b.x + b.width / 2) / task.width <= x2
              and y1 <= (b.y + b.height / 2) / task.height <= y2]
     return [b for b in boxes
             if not _card_key(b.name)
             and len(b.name) > 1
-            and not any(kw in b.name for kw in exclude_keywords)]
+            and not any(_edit_distance(b.name, kw) <= 1 for kw in exclude_keywords)]
 
 
 def _hand_cards(task: TriggerTask):
@@ -86,6 +102,7 @@ def _hand_cards(task: TriggerTask):
     cards = []
     for name_box in card_names:
         cx = name_box.x / task.width
+        left_x = (name_box.x) / task.width  # 使用左边缘坐标，避免文本长度影响间距判断
         cy = name_box.y / task.height
 
         candidates = []
@@ -103,27 +120,36 @@ def _hand_cards(task: TriggerTask):
         if candidates:
             best = min(candidates, key=lambda x: cx - x[0])
             used_keys.add(best[2])
-            cards.append({"name": name_box.name, "key": best[2], "x": cx})
+            cards.append({"name": name_box.name, "key": best[2], "x": cx, "left_x": left_x})
         else:
-            cards.append({"name": name_box.name, "key": None, "x": cx})
+            cards.append({"name": name_box.name, "key": None, "x": cx, "left_x": left_x})
 
     # 推断缺失的按键，所有推断的按键不超过9（数字键盘最大按键）
-    # 使用位置插值法：根据手牌总数和卡牌 x 坐标估算每张牌的按键
+    # 使用位置插值法（基于卡牌左边缘 left_x，避免文本长度影响间距）
     if hand_count is not None and len(cards) > 0:
         sorted_cards = sorted(enumerate(cards), key=lambda x: x[1]["x"])
         if hand_count > 1 and len(cards) >= 2:
-            first_x = sorted_cards[0][1]["x"]
-            last_x = sorted_cards[-1][1]["x"]
-            total_span = last_x - first_x
+            first_left = sorted_cards[0][1]["left_x"]
+            last_left = sorted_cards[-1][1]["left_x"]
+            total_span = last_left - first_left
             expected_spacing = total_span / (hand_count - 1)
             for idx, c in sorted_cards:
-                approx_key = 1 + round((c["x"] - first_x) / expected_spacing)
-                approx_key = min(approx_key, 9)
-                c["key"] = str(approx_key)
+                if c["key"] is not None:
+                    # 已有匹配按键的保留，仅做日志记录
+                    approx_key = 1 + round((c["left_x"] - first_left) / expected_spacing)
+                    approx_key = min(approx_key, 9)
+                    if int(c["key"]) != approx_key:
+                        task.log_info(f"_hand_cards: 卡牌「{c['name']}」 left_x={c['left_x']:.4f} 已匹配按键{c['key']}，插值估算为{approx_key}，保留原匹配")
+                else:
+                    approx_key = 1 + round((c["left_x"] - first_left) / expected_spacing)
+                    approx_key = min(approx_key, 9)
+                    c["key"] = str(approx_key)
+                    task.log_info(f"_hand_cards: 卡牌「{c['name']}」 left_x={c['left_x']:.4f} → 间距推断→ {approx_key}")
         else:
             # 只有一张卡牌或手牌数=1，直接分配按键1
             for idx, c in sorted_cards:
-                c["key"] = "1"
+                if c["key"] is None:
+                    c["key"] = "1"
     else:
         # 无法读取手牌数，用简单推断
         for i, c in enumerate(cards):
@@ -376,24 +402,33 @@ def handle_get_card(task: TriggerTask):
     for x, y in [(0.194, 0.310), (0.471, 0.311), (0.750, 0.310)]:
         box = find_box_at_point(task, x, y)
         if box:
+            box_info = f"name=「{box.name}」 x={box.x} y={box.y} w={box.width} h={box.height}"
+            task.log_info(f"获得卡牌: 槽位({x},{y}) 识别到 {box_info}")
             cards.append({"name": box.name, "x": x, "y": y})
+        else:
+            task.log_info(f"获得卡牌: 槽位({x},{y}) 未识别到任何文本")
     if not cards:
+        task.log_info("获得卡牌: 三个槽位均未识别到卡牌，无法选择")
         return False
-    for name in _get_config_value(task, "获得卡牌优先级", []):
+
+    priority = _get_config_value(task, "获得卡牌优先级", [])
+    task.log_info(f"获得卡牌: 识别到{len(cards)}张卡牌: {[c['name'] for c in cards]}, 当前优先级配置: {priority}")
+    for name in priority:
+        task.log_info(f"获得卡牌: 检查优先级「{name}」是否在卡牌列表中")
         chosen = next((card for card in cards if name in card["name"]), None)
         if chosen:
-            task.log_info(f"获得卡牌: 优先选择「{chosen['name']}」")
+            task.log_info(f"获得卡牌: 优先选择「{chosen['name']}」(匹配优先级「{name}」)")
             task.click(chosen["x"], chosen["y"])
             task.sleep(0.5)
             task.click(0.912, 0.931)
             return True
     if _get_config_value(task, '跳过非优先级卡牌', True):
-        task.log_info("获得卡牌: 未命中优先级，跳过非优先级卡牌")
+        task.log_info("获得卡牌: 未命中任何优先级卡牌，跳过非优先级卡牌")
         task.click(0.749, 0.931)
         task.sleep(1)
         return True
     chosen = random.choice(cards)
-    task.log_info(f"获得卡牌: 随机选择「{chosen['name']}」")
+    task.log_info(f"获得卡牌: 跳过非优先级卡牌配置为False，随机选择「{chosen['name']}」")
     task.click(chosen["x"], chosen["y"])
     task.sleep(1)
     # task.click(0.912, 0.931)
