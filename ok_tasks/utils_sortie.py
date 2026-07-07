@@ -166,7 +166,12 @@ def _read_member_slots(task: TriggerTask):
     slots = []
     for x, y in [(0.320, 0.731), (0.592, 0.728), (0.850, 0.722)]:
         box = find_box_at_point(task, x, y)
-        slots.append({"name": box.name if box else "", "x": x, "y": y, "refresh_y": 0.800})
+        name = box.name if box else ""
+        if box:
+            task.log_info(f"_read_member_slots: 槽位({x},{y}) 识别到名称=「{name}」 box_x={box.x} box_y={box.y} box_w={box.width} box_h={box.height}")
+        else:
+            task.log_info(f"_read_member_slots: 槽位({x},{y}) 未识别到任何文本")
+        slots.append({"name": name, "x": x, "y": y, "refresh_y": 0.800})
     return slots
 
 
