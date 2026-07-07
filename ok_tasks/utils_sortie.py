@@ -214,16 +214,22 @@ def _select_battle_member(task: TriggerTask, max_scrolls=5):
     for scroll_index in range(max_scrolls + 1):
         boxes = _battle_member_boxes(task)
         recognized_names = [box.name for box in boxes]
-        task.log_info(f"第{scroll_index + 1}次扫描, OCR识别到的主战员: {recognized_names}")
+        task.log_info(f"第{scroll_index + 1}次扫描, OCR识别到{len(boxes)}个主战员:")
+        for b in boxes:
+            cx = (b.x + b.width / 2) / task.width
+            cy = (b.y + b.height / 2) / task.height
+            task.log_info(f"  box: name=「{b.name}」 cx={cx:.4f} cy={cy:.4f} x={b.x} y={b.y} w={b.width} h={b.height}")
         for name in priority:
             member = next((box for box in boxes if name in box.name), None)
             if member:
-                task.log_info(f"出战主战员优先级匹配成功: 「{name}」->「{member.name}」")
+                cx = (member.x + member.width / 2) / task.width
+                cy = (member.y + member.height / 2) / task.height
+                task.log_info(f"出战主战员优先级匹配成功: 配置名「{name}」-> OCR名「{member.name}」 cx={cx:.4f} cy={cy:.4f} x={member.x} y={member.y} w={member.width} h={member.height}")
                 task.click_box(member)
                 task.sleep(0.5)
                 return _confirm_battle_member_selection(task)
             else:
-                task.log_info(f"出战主战员优先级匹配失败: 「{name}」未在当前列表中")
+                task.log_info(f"出战主战员优先级匹配失败: 「{name}」未在当前列出的{len(boxes)}个主战员中")
         if scroll_index < max_scrolls:
             task.log_info(f"第{scroll_index + 1}次未匹配到任何优先级角色, 向下滚动重试")
             task.scroll_relative(0.5, 0.7, -3)
@@ -234,7 +240,9 @@ def _select_battle_member(task: TriggerTask, max_scrolls=5):
         task.log_info("出战主战员列表为空，无法选择")
         return False
     member = random.choice(boxes)
-    task.log_info(f"未找到配置中的出战主战员，随机选择「{member.name}」")
+    cx = (member.x + member.width / 2) / task.width
+    cy = (member.y + member.height / 2) / task.height
+    task.log_info(f"未找到配置中的出战主战员，随机选择「{member.name}」 cx={cx:.4f} cy={cy:.4f} x={member.x} y={member.y} w={member.width} h={member.height}")
     task.click_box(member)
     task.sleep(0.5)
     return _confirm_battle_member_selection(task)
