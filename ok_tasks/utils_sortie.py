@@ -24,6 +24,7 @@ from utils import (
 
 import re
 import random
+import cv2
 
 
 # ------------------------- 出击模式独有工具 -------------------------
@@ -286,6 +287,24 @@ def handle_battle_page(task: TriggerTask):
         task.swipe_relative(hand_x, hand_y, 0.5, 0.3, duration=0.3)
         task.sleep(1)
         return True
+
+    # 检测 EP 能量条是否满（0.032,0.947 处 RGB 接近 (193,255,255)）
+    ep_px = int(0.032 * task.width)
+    ep_py = int(0.947 * task.height)
+    if 0 <= ep_px < task.width and 0 <= ep_py < task.height:
+        ep_region = task.frame[max(0, ep_py-2):ep_py+3, max(0, ep_px-2):ep_px+3, :3]
+        if ep_region.size > 0:
+            avg_bgr = cv2.mean(ep_region)[:3]
+            # OpenCV 是 BGR 格式，用户描述的是 RGB(193,255,255) → BGR(255,255,193)
+            avg_b, avg_g, avg_r = avg_bgr
+            task.log_info(f"EP能量条区域颜色: B={avg_b:.1f} G={avg_g:.1f} R={avg_r:.1f} (期望接近 B=255 G=255 R=193)")
+            if abs(avg_b - 255) <= 15 and abs(avg_g - 255) <= 15 and abs(avg_r - 193) <= 15:
+                task.log_info("EP能量达到最大值，随机释放Ego技能")
+                task.send_key(random.choice(["F1", "F2", "F3"]))
+                task.sleep(1)
+                task.send_key("enter")
+                task.sleep(4)
+                return True
 
     finishturn_box = task.box_of_screen(0.844, 0.782, 0.998, 0.990)
     if not task.find_feature(feature_name="finishturn", box=finishturn_box):
