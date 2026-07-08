@@ -133,8 +133,8 @@ def _card_has_type_below(task: TriggerTask, box):
     return False
 
 
-def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep=1, max_scrolls=5, fallback_delete=False, count=1):
-    """依次匹配卡牌名（子串包含匹配），点击命中的前 count 张（同一张不会重复选）；可选再点击确认按钮。
+def select_card(task: TriggerTask, card_names, max_scrolls=5, fallback_delete=False, count=1):
+    """依次匹配卡牌名（子串包含匹配），点击命中的前 count 张（同一张不会重复选）。
     支持向下滚动查找，若滚到底部仍未找到足够数量且 fallback_delete 为 True，则补充点击最后的牌。
     返回成功选择的数量。
     """
@@ -163,10 +163,6 @@ def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep
                 used_positions.append((card.x, card.y, card.width, card.height))
                 selected += 1
                 if selected >= count:
-                    # if confirm_point:
-                    #     task.sleep(0.5)
-                    #     task.click(*confirm_point)
-                    #     task.sleep(confirm_sleep)
                     return selected
         if i < max_scrolls:
             task.log_info(f"select_card 第{i+1}次未找到目标, 向下滚动")
@@ -198,10 +194,6 @@ def select_card(task: TriggerTask, card_names, confirm_point=None, confirm_sleep
             selected += 1
             task.sleep(0.3)
 
-    # if selected > 0 and confirm_point:
-    #     task.sleep(0.5)
-    #     task.click(*confirm_point)
-    #     task.sleep(confirm_sleep)
     return selected
 
 
@@ -552,7 +544,7 @@ def handle_equipment(task: TriggerTask):
         task.log_info("检测到装备页面")
         # 判断是否为安装装备界面（选择主战员）
         equip_hint = find_box_at_point(task, 0.921, 0.135)
-        if equip_hint and "请选择主战员" in equip_hint.name:
+        if equip_hint and _get_game_text(task, '请选择主战员') in equip_hint.name:
             task.log_info("检测到安装装备界面，随机选择主战员")
             px1, py1 = int(0.609 * task.width), int(0.290 * task.height)
             px2, py2 = int(0.652 * task.width), int(0.789 * task.height)
@@ -597,15 +589,31 @@ def handle_mask_card(task: TriggerTask):
     return False
 
 
-def handle_remove_card(task: TriggerTask):
-    """移除卡牌页面: 按策略移除指定卡牌，1张或2张，找不到则删最后的牌。"""
+# 卡牌操作关键词 → 配置 key 映射
+_SELECT_CARD_CONFIG_KEYS = {
+    "移除": "移除卡牌列表",
+    "复制": "复制卡牌列表",
+    "闪光": "闪光卡牌列表",
+}
+
+
+def handle_select_card(task: TriggerTask):
+    """统一卡牌选择页面: 在(0.198,0.039)处检测文本，按移除/复制/闪光等关键字匹配配置并选择卡牌。"""
     box = find_box_at_point(task, 0.198, 0.039)
-    if box and ("请选择1张要移除" in box.name or "请选择2张要移除" in box.name):
-        count = 2 if "2张" in box.name else 1
-        task.log_info(f"检测获得卡牌移除，需选择{count}张，进行相应操作")
-        select_card(task, _get_card_list(task, "移除卡牌列表"), confirm_point=(0.951, 0.932), fallback_delete=True, count=count)
-        return True
-    return False
+    if not box:
+        return False
+    m = re.search(r'请选择(\d*)张*.*?(移除|复制|闪光)的卡牌', box.name)
+    if not m:
+        return False
+    count_text = m.group(1)
+    action = m.group(2)
+    count = int(count_text) if count_text else 1
+    config_key = _SELECT_CARD_CONFIG_KEYS.get(action)
+    if config_key is None:
+        return False
+    task.log_info(f"检测到卡牌{action}选择，需选择{count}张，配置key={config_key}")
+    select_card(task, _get_card_list(task, config_key), fallback_delete=True, count=count)
+    return True
 
 
 def handle_copy_member(task: TriggerTask):
@@ -615,37 +623,6 @@ def handle_copy_member(task: TriggerTask):
         task.log_info("检测到卡牌复制主战员选择事件，进行相应操作")
         task.click(0.228, 0.510)
         task.sleep(1)
-        # task.click(0.951, 0.932)
-        return True
-    return False
-
-
-def handle_copy_card(task: TriggerTask):
-    """请选择要复制的卡牌页面: 按策略选择。"""
-    box = find_box_at_point(task, 0.505, 0.131)
-    if box and re.search(r"请选择.*要复制的卡牌", box.name):
-        task.log_info("检测到卡牌复制选择，进行相应操作")
-        select_card(task, _get_card_list(task, '复制卡牌列表'), fallback_delete=True)
-        return True
-    return False
-
-
-def handle_flash_card(task: TriggerTask):
-    """自选卡牌闪光页面: 按策略选择并确认。"""
-    box = find_box_at_point(task, 0.951, 0.932)
-    if box and "闪光" in box.name:
-        task.log_info("检测到卡牌闪光选择，进行相应操作")
-        select_card(task, _get_card_list(task, '闪光卡牌列表'), confirm_point=(0.951, 0.932), fallback_delete=True)
-        return True
-    return False
-
-
-def handle_copy_card_pick(task: TriggerTask):
-    """自选卡牌复制页面: 按策略选择并确认。"""
-    box = find_box_at_point(task, 0.951, 0.932)
-    if box and "复制" in box.name:
-        task.log_info("检测到卡牌复制选择，进行相应操作")
-        select_card(task, _get_card_list(task, '复制卡牌列表'), confirm_point=(0.951, 0.932), fallback_delete=True)
         return True
     return False
 
@@ -674,7 +651,7 @@ def handle_negotiation(task: TriggerTask):
 
 def handle_continue(task: TriggerTask):
     """通用"继续"按钮。"""
-    box = find_exact_text(task, "继续")
+    box = find_exact_text(task, _get_game_text(task, '继续'))
     if box:
         task.log_info("检测到下一步操作，点击继续")
         task.click_box(box)
@@ -1067,7 +1044,7 @@ def handle_view_original(task: TriggerTask):
     """卡牌闪光（查看原件）事件: 聚类卡牌名和效果描述，按 FLASH_PRIORITY 优先选择。"""
     box1 = find_box_at_point(task, 0.890, 0.051)
     box2 = find_box_at_point(task, 0.896, 0.131)
-    if not ((box1 and ("查看原件" in box1.name or "查看之前的闪光" in box1.name)) or (box2 and ("查看原件" in box2.name or "查看之前的闪光" in box2.name))):
+    if not ((box1 and (_get_game_text(task, '查看原件') in box1.name or "查看之前的闪光" in box1.name)) or (box2 and (_get_game_text(task, '查看原件') in box2.name or "查看之前的闪光" in box2.name))):
         return False
 
     name_cols = _cluster_region_boxes(task, (0.148, 0.192, 0.859, 0.325))
