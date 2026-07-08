@@ -1194,7 +1194,7 @@ def handle_expedition_unlock(task: TriggerTask):
     box = find_box_at_point(task, 0.5, 0.151)
     if box and re.search(r"解锁的探险记录将会在.*", box.name):
         task.log_info("检测到解锁探险记录页面，点击页面")
-        task.click(0.5, 0.8)
+        task.click(0.500, 0.900)
         task.sleep(1)
         return True
     return False
