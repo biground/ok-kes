@@ -76,7 +76,7 @@ def handle_zero_system_home(task: TriggerTask):
     """零式系统首页: 点击法典。"""
     title = find_box_at_point(task, 0.120, 0.046)
     codex = find_box_at_point(task, 0.812, 0.469)
-    if title and title.name == "零式系统" and codex and codex.name == "法典":
+    if title and _get_game_text(task, '零式系统') in title.name and codex and codex.name == "法典":
         task.log_info("检测到零式系统首页，点击法典")
         task.click_box(codex)
         task.sleep(2)
@@ -98,7 +98,7 @@ def handle_codex_search(task: TriggerTask):
 def handle_memory_elimination(task: TriggerTask):
     """记忆消除页面: 点击记忆消除按钮。"""
     box = find_box_at_point(task, 0.589, 0.703)
-    if box and box.name == "记忆消除":
+    if box and _get_game_text(task, '记忆消除') in box.name:
         task.log_info("检测到记忆消除页面，点击记忆消除")
         task.click_box(box)
         task.sleep(0.5)
@@ -205,10 +205,10 @@ def handle_mental_breakdown(task: TriggerTask):
 def handle_trauma_center(task: TriggerTask):
     """创伤中心: 优先使用旅行券治疗；若配置"优先使用金币治疗"为True，则始终使用金币治疗。"""
     box = find_box_at_point(task, 0.125, 0.049)
-    if not (box and "创伤中心" in box.name):
+    if not (box and _get_game_text(task, '创伤中心') in box.name):
         return False
     task.log_info("检测到创伤中心，采取策略，优先使用旅行券")
-    if find_text(task, r'没有恢复中的战员'):
+    if find_text(task, _get_game_text(task, '没有恢复中的战员')):
         task.click(0.044, 0.046)
         return True
     task.click(0.420, 0.339)
