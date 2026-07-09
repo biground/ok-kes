@@ -228,7 +228,7 @@ def handle_trauma_center(task: TriggerTask):
 
 def handle_treating(task: TriggerTask):
     """治疗进行中页面: 选择治疗方法。"""
-    if find_text(task, r'选择哪种方法进行治疗'):
+    if find_text(task, _get_game_text(task, '选择哪种方法进行治疗')):
         task.log_info("检测到治疗进行中")
         task.click(0.765, 0.500)
         return True
@@ -237,7 +237,7 @@ def handle_treating(task: TriggerTask):
 
 def handle_treat_approve(task: TriggerTask):
     """治疗完成页面: 点击批准。"""
-    if find_text(task, r'点击批准'):
+    if find_text(task, _get_game_text(task, '点击批准')):
         task.log_info("检测到治疗完成，点击批准")
         task.click(0.768, 0.810)
         return True
