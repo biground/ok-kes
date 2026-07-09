@@ -393,7 +393,7 @@ def handle_get_card(task: TriggerTask):
     """获得卡牌页面: 按优先级选择卡牌。"""
     title = find_box_at_point(task, 0.502, 0.128)
     tip = find_box_at_point(task, 0.883, 0.131)
-    if not (title and title.name == "获得卡牌" and tip and re.search(r"请选择.*要获得的卡牌", tip.name)):
+    if not (title and title.name == "获得卡牌" and tip and re.search(r"请选择.*获得的卡牌", tip.name)):
         return False
     cards = []
     for x, y in [(0.194, 0.310), (0.471, 0.311), (0.750, 0.310)]:
@@ -874,8 +874,8 @@ PAGE_HANDLERS = [
     handle_destiny_choice,
     handle_main_member_flash,
     handle_boss_selection,
-    handle_card_reward,
     handle_get_card,
+    handle_card_reward,
     handle_draw_card_event,
     handle_equipment,
     # handle_mask_card,
