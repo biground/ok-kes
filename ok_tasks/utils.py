@@ -37,11 +37,15 @@ def _simplify_texts(texts):
 
 
 def _get_config_value(task: TriggerTask, key, default):
-    """读取运行时配置，优先从 task.config 读取，其次 default_config，最后使用默认值。"""
+    """读取运行时配置，优先从 task.config 读取，其次 default_config，最后使用默认值。返回前将字符串转简体。"""
     if hasattr(task, 'config') and key in task.config:
         value = task.config[key]
     else:
         value = getattr(task, 'default_config', {}).get(key, default)
+    if isinstance(value, str):
+        value = _cc.convert(value)
+    elif isinstance(value, (list, tuple)):
+        value = [_cc.convert(v) if isinstance(v, str) else v for v in value]
     return value
 
 
@@ -145,7 +149,7 @@ def _card_has_type_below(task: TriggerTask, box):
         by = (b.y + b.height / 2) / task.height
         dy = by - box_bottom_y
         if -0.005 <= dy <= 0.040:
-            if "攻击" in b.name or "强化" in b.name or "技能" in b.name or "技" in b.name or "咒术" in b.name:
+            if "攻击" in b.name or "强化" in b.name or "技能" in b.name or "技" in b.name or "咒术" in b.name or "诅咒" in b.name:
                 return True
     return False
 
