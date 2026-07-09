@@ -54,10 +54,21 @@ def _card_key(text):
     return m.group(0) if m else None
 
 
+def _is_card_name(name):
+    """判断文本是否为卡牌名：排除类型标签。"""
+    exclude_keywords = {"攻击", "强化", "技能", "咒术", "基础", "基本", "状态异常", "诅咒"}
+    # 包含类型关键词的文本不是卡牌名
+    if any(kw in name for kw in exclude_keywords):
+        return False
+    # 包含"攻"且长度<=3的文本不是卡牌名（如"X攻"、"基本攻"）
+    if "攻" in name and len(name) <= 3:
+        return False
+    return True
+
+
 def _hand_card_names(task: TriggerTask):
     """读取手牌区域内的卡牌名，排除按键和类型标签文本。"""
     x1, y1, x2, y2 = 0.159, 0.683, 0.836, 0.831
-    exclude_keywords = {"攻击", "强化", "技能", "咒术", "状态异常", "诅咒"}
 
     # 打印所有文本及其坐标，帮助判断手牌区域过滤问题
     task.log_info(f"_hand_card_names 区域: cx=[{x1}, {x2}], cy=[{y1}, {y2}]")
@@ -67,8 +78,7 @@ def _hand_card_names(task: TriggerTask):
         in_region = x1 <= cx <= x2 and y1 <= cy <= y2
         has_key = _card_key(b.name)
         name_len = len(b.name.strip())
-        kw_exact = b.name in exclude_keywords
-        task.log_info(f"  OCR: 「{b.name}」 cx={cx:.4f} cy={cy:.4f} in_region={in_region} has_key={has_key} len={name_len} kw_exact={kw_exact}")
+        task.log_info(f"  OCR: 「{b.name}」 cx={cx:.4f} cy={cy:.4f} in_region={in_region} has_key={has_key} len={name_len}")
 
     boxes = [b for b in task.all_texts
              if x1 <= (b.x + b.width / 2) / task.width <= x2
@@ -76,7 +86,7 @@ def _hand_card_names(task: TriggerTask):
     result = [b for b in boxes
               if not _card_key(b.name)
               and len(b.name.strip()) > 1
-              and not any(kw in b.name for kw in exclude_keywords)]
+              and _is_card_name(b.name)]
     task.log_info(f"_hand_card_names 区域共{len(boxes)}个文本，过滤后剩{len(result)}个: {[b.name for b in result]}")
     return result
 
@@ -121,37 +131,41 @@ def _hand_cards(task: TriggerTask):
         else:
             cards.append({"name": name_box.name, "key": None, "x": cx, "left_x": left_x})
 
-    # 推断缺失的按键，所有推断的按键不超过9（数字键盘最大按键）
-    # 使用位置插值法（基于卡牌左边缘 left_x，避免文本长度影响间距）
-    if hand_count is not None and len(cards) > 0:
-        sorted_cards = sorted(enumerate(cards), key=lambda x: x[1]["x"])
-        if hand_count > 1 and len(cards) >= 2:
-            first_left = sorted_cards[0][1]["left_x"]
-            last_left = sorted_cards[-1][1]["left_x"]
-            total_span = last_left - first_left
-            expected_spacing = total_span / (hand_count - 1)
-            for idx, c in sorted_cards:
-                if c["key"] is not None:
-                    # 已有匹配按键的保留，仅做日志记录
-                    approx_key = 1 + round((c["left_x"] - first_left) / expected_spacing)
-                    approx_key = min(approx_key, 9)
-                    if int(c["key"]) != approx_key:
-                        task.log_info(f"_hand_cards: 卡牌「{c['name']}」 left_x={c['left_x']:.4f} 已匹配按键{c['key']}，插值估算为{approx_key}，保留原匹配")
-                else:
-                    approx_key = 1 + round((c["left_x"] - first_left) / expected_spacing)
-                    approx_key = min(approx_key, 9)
-                    c["key"] = str(approx_key)
-                    task.log_info(f"_hand_cards: 卡牌「{c['name']}」 left_x={c['left_x']:.4f} → 间距推断→ {approx_key}")
-        else:
-            # 只有一张卡牌或手牌数=1，直接分配按键1
-            for idx, c in sorted_cards:
-                if c["key"] is None:
-                    c["key"] = "1"
-    else:
-        # 无法读取手牌数，用简单推断
-        for i, c in enumerate(cards):
+    # 推断缺失的按键：用最小相邻间距作为 expected_spacing 进行插值
+    # 以最近的前一张已有按键的卡牌为基准推算，避免累积误差
+    if len(cards) >= 2:
+        sorted_cards = sorted(enumerate(cards), key=lambda x: x[1]["left_x"])
+        # 计算相邻卡牌 left_x 的最小间距
+        min_spacing = float('inf')
+        for i in range(len(sorted_cards) - 1):
+            spacing = sorted_cards[i + 1][1]["left_x"] - sorted_cards[i][1]["left_x"]
+            if spacing < min_spacing:
+                min_spacing = spacing
+        expected_spacing = max(0.055, min_spacing)  # 从0.055和最小间距中取最大值，防止除零
+        task.log_info(f"_hand_cards: 最小间距={min_spacing:.4f}")
+        # 确保最左边的卡牌有按键，如果没有则分配1
+        if sorted_cards[0][1]["key"] is None:
+            sorted_cards[0][1]["key"] = "1"
+            task.log_info(f"_hand_cards: 卡牌「{sorted_cards[0][1]['name']}」 left_x={sorted_cards[0][1]['left_x']:.4f} → 最左卡牌分配按键1")
+        for i in range(1, len(sorted_cards)):
+            idx, c = sorted_cards[i]
             if c["key"] is None:
-                c["key"] = str(min(i + 1, 9))
+                # 向前查找最近一张已有按键的卡牌
+                for j in range(i - 1, -1, -1):
+                    prev_idx, prev_c = sorted_cards[j]
+                    if prev_c["key"] is not None:
+                        offset = (c["left_x"] - prev_c["left_x"]) / expected_spacing
+                        approx_key = int(prev_c["key"]) + round(offset)
+                        if 1 <= approx_key <= 9:
+                            c["key"] = str(approx_key)
+                            task.log_info(f"_hand_cards: 卡牌「{c['name']}」 left_x={c['left_x']:.4f} 基于「{prev_c['name']}」(key={prev_c['key']}) offset={offset:.2f} → {c['key']}")
+                        else:
+                            task.log_info(f"_hand_cards: 卡牌「{c['name']}」 left_x={c['left_x']:.4f} 基于「{prev_c['name']}」(key={prev_c['key']}) offset={offset:.2f} → 推算={approx_key}超出1-9，不分配")
+                        break
+    elif len(cards) == 1:
+        if cards[0]["key"] is None:
+            cards[0]["key"] = "1"
+            task.log_info(f"_hand_cards: 单张卡牌，分配按键1")
 
     task.log_info(f"_hand_cards: 识别到 {len(cards)} 张手牌: {[(c['name'], c['key']) for c in cards]}")
     return cards
@@ -612,7 +626,7 @@ def handle_battle_hand_select(task: TriggerTask):
     need = int(m.group(1))
     task.log_info(f"检测到战斗中手牌选择页面，需选择{need}张卡牌，随机选择")
 
-    _card_exclude_keywords = {"攻击", "强化", "技能", "咒术", "状态异常", "诅咒"}
+    _card_exclude_keywords = {"攻击", "强化", "技能", "咒术", "基础", "基本", "状态异常", "诅咒"}
     selected = 0
     for _ in range(need):
         task.all_texts = _simplify_texts(task.ocr())
@@ -623,6 +637,7 @@ def handle_battle_hand_select(task: TriggerTask):
             and len(b.name.strip()) > 1
             and b.name not in ["确认", "返回", "跳过"]
             and not any(kw in b.name for kw in _card_exclude_keywords)
+            and not ("攻" in b.name and len(b.name) <= 3)
         ]
         if not cards:
             task.log_info("手牌区域未找到卡牌，随机在手牌区域内点击一个位置")
@@ -900,5 +915,5 @@ PAGE_HANDLERS = [
     handle_weakness_info,
     handle_minimizemap,
     handle_held_cards_page,
-    # handle_unknown_page,
+    handle_unknown_page,
 ]
