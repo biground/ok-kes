@@ -1,7 +1,7 @@
 from ok import TriggerTask
 
 from utils import (
-    _simplify_texts, _get_config_value, _get_card_list, _get_route_priority,
+    _simplify_texts, _get_config_value, _get_card_list, _get_route_priority, _get_game_text,
     find_box_at_point, find_text, find_exact_text,
     _card_has_type_below, select_card, identify_node_type,
     log_credit, handle_battle_crash, handle_close_page,
@@ -193,14 +193,12 @@ def handle_expedition_unlock(task: TriggerTask):
 def handle_mental_breakdown(task: TriggerTask):
     """精神崩溃发生页面: 根据配置决定是否治疗崩溃。"""
     box = find_box_at_point(task, 0.496, 0.186)
-    if box and box.name == "精神崩溃发生":
+    if box and _get_game_text(task, '精神崩溃发生') in box.name:
         if _get_config_value(task, '治疗崩溃', True):
             task.log_info("检测到精神崩溃发生，去创伤中心治疗")
             task.click(0.706, 0.915)
-        else:
-            task.log_info("检测到精神崩溃发生，治疗崩溃配置为False，关闭页面")
-            task.click(0.889, 0.919)
-        return True
+            task.sleep(1)
+            return True
     return False
 
 
@@ -260,6 +258,7 @@ PAGE_HANDLERS = [
     handle_grant_flash, #赋予闪光按钮
     handle_copy, #复制按钮
     handle_leave, #离开按钮
+    handle_mental_breakdown, #精神崩溃，优先级高于下一步按钮
     handle_next_step, #下一步按钮
     handle_craft, #合成按钮
     handle_select, #选择按钮
@@ -292,7 +291,6 @@ PAGE_HANDLERS = [
     handle_view_original,
     handle_battle_failed,
     handle_data_collected,
-    handle_mental_breakdown,
     handle_trauma_center,
     handle_treating,
     handle_treat_approve,
