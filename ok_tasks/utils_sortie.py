@@ -55,16 +55,30 @@ def _card_key(text):
 
 
 def _hand_card_names(task: TriggerTask):
-    """读取手牌区域内的卡牌名，排除按键和与"攻击""强化""技能"编辑距离<=1的文本。"""
+    """读取手牌区域内的卡牌名，排除按键和类型标签文本。"""
     x1, y1, x2, y2 = 0.159, 0.683, 0.836, 0.831
-    exclude_keywords = ["攻击", "强化", "技能", "咒术", "状态异常"]
+    exclude_keywords = {"攻击", "强化", "技能", "咒术", "状态异常", "诅咒"}
+
+    # 打印所有文本及其坐标，帮助判断手牌区域过滤问题
+    task.log_info(f"_hand_card_names 区域: cx=[{x1}, {x2}], cy=[{y1}, {y2}]")
+    for b in task.all_texts:
+        cx = (b.x + b.width / 2) / task.width
+        cy = (b.y + b.height / 2) / task.height
+        in_region = x1 <= cx <= x2 and y1 <= cy <= y2
+        has_key = _card_key(b.name)
+        name_len = len(b.name.strip())
+        kw_exact = b.name in exclude_keywords
+        task.log_info(f"  OCR: 「{b.name}」 cx={cx:.4f} cy={cy:.4f} in_region={in_region} has_key={has_key} len={name_len} kw_exact={kw_exact}")
+
     boxes = [b for b in task.all_texts
              if x1 <= (b.x + b.width / 2) / task.width <= x2
              and y1 <= (b.y + b.height / 2) / task.height <= y2]
-    return [b for b in boxes
-            if not _card_key(b.name)
-            and len(b.name) > 1
-            and not any(_edit_distance(b.name, kw) <= 1 for kw in exclude_keywords)]
+    result = [b for b in boxes
+              if not _card_key(b.name)
+              and len(b.name.strip()) > 1
+              and not any(kw in b.name for kw in exclude_keywords)]
+    task.log_info(f"_hand_card_names 区域共{len(boxes)}个文本，过滤后剩{len(result)}个: {[b.name for b in result]}")
+    return result
 
 
 def _hand_cards(task: TriggerTask):
