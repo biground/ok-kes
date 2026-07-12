@@ -53,6 +53,18 @@
             "file_name": "images/0.png",
             "width": 1920,
             "height": 1080
+        },
+        {
+            "id": 45,
+            "file_name": "images/0.png",
+            "width": 1920,
+            "height": 1080
+        },
+        {
+            "id": 47,
+            "file_name": "images/0.png",
+            "width": 1920,
+            "height": 1080
         }
     ],
     "annotations": [
@@ -198,6 +210,45 @@
             ],
             "area": 4410,
             "iscrowd": 0
+        },
+        {
+            "id": 12,
+            "image_id": 45,
+            "category_id": 12,
+            "bbox": [
+                1490,
+                25,
+                83,
+                67
+            ],
+            "area": 5561,
+            "iscrowd": 0
+        },
+        {
+            "id": 13,
+            "image_id": 47,
+            "category_id": 13,
+            "bbox": [
+                1081,
+                526,
+                34,
+                39
+            ],
+            "area": 1326,
+            "iscrowd": 0
+        },
+        {
+            "id": 14,
+            "image_id": 47,
+            "category_id": 14,
+            "bbox": [
+                844,
+                360,
+                30,
+                37
+            ],
+            "area": 1110,
+            "iscrowd": 0
         }
     ],
     "categories": [
@@ -254,6 +305,21 @@
         {
             "id": 11,
             "name": "treasure",
+            "supercategory": ""
+        },
+        {
+            "id": 12,
+            "name": "skipstory",
+            "supercategory": ""
+        },
+        {
+            "id": 13,
+            "name": "enterstory",
+            "supercategory": ""
+        },
+        {
+            "id": 14,
+            "name": "enterbattle",
             "supercategory": ""
         }
     ]
