@@ -34,6 +34,7 @@ class SortieMode(TriggerTask):
         self.default_config["跳过非优先级卡牌"] = True
         self.default_config["生命值大于多少优先闪光(百分比)"] = "60"
         # self.default_config["从右往左出牌"] = True
+        self.node_status = {"shop": False, "flash_or_rest": False}
 
     def enable(self):
         """开启出击模式时自动禁用卡厄思模式。"""

@@ -895,6 +895,15 @@ def handle_route_selection(task: TriggerTask):
     if not is_route_page:
         return False
     task.log_info("检测到路线选择页面，按优先级依次点击节点")
+
+    # 更新节点状态：进入路线选择页面时 flash_or_rest 置为 True
+    if hasattr(task, 'node_status'):
+        task.node_status['flash_or_rest'] = True
+        task.log_info("检测到路线选择页面，更新 node_status['flash_or_rest']=True")
+        # 检查"进入商店"配置，若为 True 则同时更新 shop 状态
+        if _get_config_value(task, '进入商店', False):
+            task.node_status['shop'] = True
+            task.log_info(f"进入商店配置为True，更新 node_status['shop']=True")
     task.sleep(1)
     node_regions = {
         "node1": (0.759, 0.168, 0.769, 0.186),
@@ -1014,52 +1023,54 @@ def handle_rest(task: TriggerTask):
                 rest_box = b
             if "免费" in b.name:
                 has_free = True
-    if has_rest and has_free and rest_box:
+    if has_rest and has_free and rest_box and hasattr(task, 'node_status') and task.node_status.get('flash_or_rest', False):
         task.log_info("检测到休息界面，点击休息")
         task.click_box(rest_box)
         task.sleep(1)
+        task.node_status['flash_or_rest'] = False
+        return True
+
+    # 检测是否需要进入德朗商店
+    shop_box = find_box_at_point(task, 0.360, 0.138)
+    if shop_box and "德朗商店" in shop_box.name and hasattr(task, 'node_status') and task.node_status.get('shop', False):
+        task.log_info("检测到德朗商店，且 node_status['shop']=True，进入商店")
+        task.click_box(shop_box)
+        task.sleep(2)
+        task.node_status['shop'] = False
         return True
     return False
 
 
-# def handle_shop(task: TriggerTask):
-#     """德朗商店: 若信用点足够则点击移除卡牌。"""
-#     box = find_box_at_point(task, 0.729, 0.261)
-#     soldout = find_box_at_point(task, 0.727, 0.286)
-#     if (box and box.name == "移除卡牌") or (soldout and soldout.name in ["售罄", "售馨"]):
-#         task.log_info("handle_shop: 通过页面判定（移除卡牌或售罄）")
-#         if soldout and soldout.name in ["售罄", "售馨"]:
-#             task.log_info(f"德朗商店: 移除卡牌已售罄")
-#             task.click(0.948, 0.935)
-#             task.sleep(1)
-#             task.click(0.941, 0.918)
-#             task.sleep(1)
-#             return True
-#         credit_box = find_box_at_point(task, 0.794, 0.054)
-#         task.log_info(f"handle_shop: 0.794,0.054处信用点文本='{credit_box.name if credit_box else None}'")
-#         if not (credit_box and credit_box.name.isdigit()):
-#             task.log_info("handle_shop: 信用点读取失败，return False")
-#             return False
-#         current_credit = int(credit_box.name)
-# 
-#         cost_box = find_box_at_point(task, 0.724, 0.319)
-#         task.log_info(f"handle_shop: 0.724,0.319处费用文本='{cost_box.name if cost_box else None}'")
-#         if not (cost_box and cost_box.name.isdigit()):
-#             task.log_info("handle_shop: 费用读取失败，return False")
-#             return False
-#         cost = int(cost_box.name)
-#         if cost < current_credit:
-#             task.log_info(f"德朗商店: 移除卡牌需{cost}信用点，当前{current_credit}，足够，点击移除")
-#             task.click_box(box)
-#             return True
-#         else:
-#             task.log_info(f"德朗商店: 移除卡牌需{cost}信用点，当前{current_credit}，不足，跳过")
-#             task.click(0.948, 0.935)
-#             task.sleep(1)
-#             task.click(0.941, 0.918)
-#             task.sleep(1)
-#             return True
-#     return False
+def handle_shop(task: TriggerTask):
+    """德朗商店: 若信用点足够则点击移除卡牌。"""
+    box = find_box_at_point(task, 0.729, 0.261)
+    soldout = find_box_at_point(task, 0.727, 0.286)
+    if (box and "移除卡牌" in box.name) or (soldout and "售" in soldout.name):
+        task.log_info("handle_shop: 通过页面判定（移除卡牌或售罄）")
+        if soldout and "售" in soldout.name:
+            task.log_info(f"德朗商店: 移除卡牌已售罄")
+            return False
+        credit_box = find_box_at_point(task, 0.794, 0.054)
+        task.log_info(f"handle_shop: 0.794,0.054处信用点文本='{credit_box.name if credit_box else None}'")
+        if not (credit_box and credit_box.name.isdigit()):
+            task.log_info("handle_shop: 信用点读取失败，return False")
+            return False
+        current_credit = int(credit_box.name)
+
+        cost_box = find_box_at_point(task, 0.724, 0.319)
+        task.log_info(f"handle_shop: 0.724,0.319处费用文本='{cost_box.name if cost_box else None}'")
+        if not (cost_box and cost_box.name.isdigit()):
+            task.log_info("handle_shop: 费用读取失败，return False")
+            return False
+        cost = int(cost_box.name)
+        if cost <= current_credit:
+            task.log_info(f"德朗商店: 移除卡牌需{cost}信用点，当前{current_credit}，足够，点击移除")
+            task.click_box(box)
+            return True
+        else:
+            task.log_info(f"德朗商店: 移除卡牌需{cost}信用点，当前{current_credit}，不足，跳过")
+            return False
+    return False
 
 
 def handle_view_original(task: TriggerTask):

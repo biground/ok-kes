@@ -18,7 +18,8 @@ from utils import (
     handle_card_assign, handle_non_battle_page,
     handle_remove, handle_flash, handle_reflash, handle_grant_flash, handle_copy, handle_equipment_recast, handle_weakness_info, handle_minimizemap,
     handle_held_cards_page, handle_unknown_page,
-    is_frame_stuck, handle_stuck_log
+    is_frame_stuck, handle_stuck_log,
+    handle_shop
 )
 
 import re
@@ -794,7 +795,7 @@ def handle_rest_sortie(task: TriggerTask):
             if "30" in b.name:
                 has_flash_cost = True
 
-    if has_flash_text and has_flash_cost and flash_box:
+    if has_flash_text and has_flash_cost and flash_box and hasattr(task, 'node_status') and task.node_status.get('flash_or_rest', False):
         task.log_info("休息区存在可闪光选项")
 
         # 获取当前信用点
@@ -826,6 +827,7 @@ def handle_rest_sortie(task: TriggerTask):
             task.log_info("满足闪光条件，点击闪光")
             task.click_box(flash_box)
             task.sleep(2)
+            task.node_status['flash_or_rest'] = False
             return True
         else:
             task.log_info("不满足闪光条件，继续检测休息")
@@ -844,10 +846,20 @@ def handle_rest_sortie(task: TriggerTask):
                 rest_box = b
             if "免费" in b.name:
                 has_free = True
-    if has_rest and has_free and rest_box:
+    if has_rest and has_free and rest_box and hasattr(task, 'node_status') and task.node_status.get('flash_or_rest', False):
         task.log_info("检测到休息界面，点击休息")
         task.click_box(rest_box)
         task.sleep(1)
+        task.node_status['flash_or_rest'] = False
+        return True
+
+    # 检测是否需要进入德朗商店
+    shop_box = find_box_at_point(task, 0.360, 0.138)
+    if shop_box and "德朗商店" in shop_box.name and hasattr(task, 'node_status') and task.node_status.get('shop', False):
+        task.log_info("检测到德朗商店，且 node_status['shop']=True，进入商店")
+        task.click_box(shop_box)
+        task.sleep(2)
+        task.node_status['shop'] = False
         return True
     return False
 
@@ -857,10 +869,12 @@ PAGE_HANDLERS = [
     log_credit,
     handle_stuck_log,
 
+    handle_confirm, #确认按钮
+    handle_shop, #德朗商店
+    handle_rest_sortie, #休息/商店入口
     handle_ether_supply,
     handle_close_button, #关闭按钮
     handle_card_assign,
-    handle_confirm, #确认按钮
     handle_remove, #移除按钮
     handle_flash, #闪光按钮
     handle_reflash, #重新闪光按钮
@@ -871,7 +885,6 @@ PAGE_HANDLERS = [
     handle_select, #选择按钮
 
     handle_equipment_recast, #装备重铸按钮
-    handle_rest_sortie,
 
     handle_non_battle_page,
     handle_battle_crash,

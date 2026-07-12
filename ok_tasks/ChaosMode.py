@@ -30,6 +30,7 @@ class ChaosMode(TriggerTask):
         self.default_config['进入商店'] = False
         self.default_config['保留存档'] = False
         self.default_config['路线优先级'] = ["休息", "事件", "小怪", "boss"]
+        self.node_status = {"shop": False, "flash_or_rest": False}
 
     def enable(self):
         """开启卡厄思模式时自动禁用出击模式。"""

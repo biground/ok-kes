@@ -20,6 +20,7 @@ from utils import (
     handle_equipment_recast,
     handle_stuck_log,
     is_button_active, _clean_match,
+    handle_shop,
 )
 
 import re
@@ -265,9 +266,11 @@ PAGE_HANDLERS = [
     log_credit,
     handle_stuck_log, #画面卡住检测，仅输出日志
 
+    handle_confirm, #确认按钮
+    handle_shop, #德朗商店
+    handle_rest, #休息/商店入口
     handle_close_button, #关闭按钮
     handle_card_assign,
-    handle_confirm, #确认按钮
     handle_remove, #移除按钮
     handle_flash, #闪光按钮
     handle_reflash, #重新闪光按钮
@@ -279,8 +282,6 @@ PAGE_HANDLERS = [
     handle_craft, #合成按钮
     handle_select, #选择按钮
     handle_go_to_chaos_core, #前往卡厄思核心
-
-    handle_rest,
     handle_equipment_recast, #装备重铸按钮
 
     handle_minimizemap,
