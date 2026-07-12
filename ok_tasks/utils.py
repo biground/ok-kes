@@ -393,7 +393,7 @@ def is_frame_stuck(task: TriggerTask, stuck_threshold_seconds=30, change_thresho
     small = cv2.resize(frame, (w // 4, h // 4))
     gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
 
-    if task._prev_frame_gray is not None:
+    if task._prev_frame_gray is not None and gray.shape == task._prev_frame_gray.shape:
         diff = cv2.absdiff(gray, task._prev_frame_gray)
         _, thresh = cv2.threshold(diff, 30, 255, cv2.THRESH_BINARY)
         change_ratio = cv2.countNonZero(thresh) / (gray.shape[0] * gray.shape[1])
