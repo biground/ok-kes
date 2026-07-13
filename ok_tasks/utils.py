@@ -156,23 +156,45 @@ def _is_valid_card_name(name):
 
 def _card_has_type_below(task: TriggerTask, box):
     """判断文本框下方是否有'攻击/强化/技能/咒术'类型标签（卡牌名特征）。"""
+    TYPE_KEYWORDS = {"攻击", "强化", "技能", "技", "咒术", "诅咒",
+                     "攻", "击", "基础", "基本", "状态", "异常"}
     box_bottom_y = (box.y + box.height) / task.height
     for b in task.all_texts:
         by = (b.y + b.height / 2) / task.height
         dy = by - box_bottom_y
-        if -0.005 <= dy <= 0.040:
-            if "攻击" in b.name or "强化" in b.name or "技能" in b.name or "技" in b.name or "咒术" in b.name or "诅咒" in b.name:
+        if -0.005 <= dy <= 0.040 and len(b.name) <= 4:
+            for kw in TYPE_KEYWORDS:
+                if kw in b.name:
+                    return True
+    return False
+
+
+def _card_has_base_type_below(task: TriggerTask, box):
+    """判断卡牌下方的类型标签是否包含'基础'或'基本'。"""
+    box_bottom_y = (box.y + box.height) / task.height
+    for b in task.all_texts:
+        by = (b.y + b.height / 2) / task.height
+        dy = by - box_bottom_y
+        if -0.005 <= dy <= 0.040 and len(b.name) <= 4:
+            if "基础" in b.name or "基本" in b.name:
                 return True
     return False
 
 
-def select_card(task: TriggerTask, card_names, max_scrolls=5, fallback_delete=False, count=1):
+def select_card(task: TriggerTask, card_names, max_scrolls=5, fallback_delete=False, count=1, action=""):
     """依次匹配卡牌名（子串包含匹配），点击命中的前 count 张（同一张不会重复选）。
     支持向下滚动查找，若滚到底部仍未找到足够数量且 fallback_delete 为 True，则补充点击最后的牌。
+    当 action 为 "移除" 且配置"优先移除基础牌"为 True 时，兜底优先选择类型含"基础"的卡牌。
     返回成功选择的数量。
     """
     selected = 0
     used_positions = []
+
+    # 判断是否需要在移除删除时优先选择基础牌
+    is_remove_priority_base = False
+    if action == "移除":
+        is_remove_priority_base = _get_config_value(task, "优先移除基础牌", True)
+
     for i in range(max_scrolls + 1):
         found_cards = [b for b in task.all_texts
                        if 0.274 <= (b.x + b.width / 2) / task.width <= 0.931
@@ -217,10 +239,54 @@ def select_card(task: TriggerTask, card_names, max_scrolls=5, fallback_delete=Fa
                 and _is_valid_card_name(b.name)
                 and _card_has_type_below(task, b)
             ]
-            if not cards:
-                task.log_info("select_card fallback: 区域内无可选卡牌，停止补充")
-                break
-            fallback_card = max(cards, key=lambda b: (b.y, b.x))
+            # 如果是移除操作且启用了优先移除基础牌
+            if is_remove_priority_base:
+                # 先从当前区域找基础牌
+                base_card = next((c for c in cards if _card_has_base_type_below(task, c)), None)
+                if base_card:
+                    fallback_card = base_card
+                    task.log_info(f"select_card fallback 优先选择基础牌: 「{base_card.name}」")
+                else:
+                    task.log_info("select_card fallback: 移除操作且当前区域无基础牌，向上翻找")
+                    for up_i in range(max_scrolls):
+                        task.scroll_relative(0.5, 0.7, 3)
+                        task.sleep(0.3)
+                        task.all_texts = _simplify_texts(task.ocr())
+                        up_cards = [
+                            b for b in task.all_texts
+                            if 0.274 <= (b.x + b.width / 2) / task.width <= 0.931
+                            and 0.106 <= (b.y + b.height / 2) / task.height <= 0.878
+                            and not any(abs(ux - b.x) <= 10 and abs(uy - b.y) <= 10 for ux, uy, _, _ in used_positions)
+                            and b.name not in ["确认", "返回", "跳过"]
+                            and _is_valid_card_name(b.name)
+                            and _card_has_type_below(task, b)
+                        ]
+                        base_card = next((c for c in up_cards if _card_has_base_type_below(task, c)), None)
+                        if base_card:
+                            task.log_info(f"select_card fallback 向上翻找到基础牌: 「{base_card.name}」")
+                            task.click_box(base_card)
+                            used_positions.append((base_card.x, base_card.y, base_card.width, base_card.height))
+                            selected += 1
+                            task.sleep(0.3)
+                            break
+                    else:
+                        # 向上翻完还没找到基础牌，用回原来兜底逻辑
+                        if not cards:
+                            task.log_info("select_card fallback: 上翻后无基础牌且原区域无卡牌，停止补充")
+                            break
+                        fallback_card = max(cards, key=lambda b: (b.y, b.x))
+                        task.log_info(f"select_card fallback 上翻未找到基础牌，回退选择: 「{fallback_card.name}」")
+                        task.click_box(fallback_card)
+                        used_positions.append((fallback_card.x, fallback_card.y, fallback_card.width, fallback_card.height))
+                        selected += 1
+                        task.sleep(0.3)
+                    continue
+            else:
+                # 非移除操作，用原有兜底
+                if not cards:
+                    task.log_info("select_card fallback: 区域内无可选卡牌，停止补充")
+                    break
+                fallback_card = max(cards, key=lambda b: (b.y, b.x))
             task.log_info(f"select_card fallback 补充点击: 名称「{fallback_card.name}」, 位置({fallback_card.x},{fallback_card.y})")
             task.click_box(fallback_card)
             used_positions.append((fallback_card.x, fallback_card.y, fallback_card.width, fallback_card.height))
@@ -632,7 +698,13 @@ def handle_select_card(task: TriggerTask):
     if config_key is None:
         return False
     task.log_info(f"检测到卡牌{action}选择，需选择{count}张，配置key={config_key}")
-    select_card(task, _get_card_list(task, config_key), fallback_delete=True, count=count)
+
+    # 日志打印右下角选牌操作提示
+    action_tip = find_box_at_point(task, 0.945, 0.918)
+    if action_tip:
+        task.log_info(f"右下角选牌操作提示: 「{action_tip.name}」")
+
+    select_card(task, _get_card_list(task, config_key), fallback_delete=True, count=count, action=action)
     return True
 
 
