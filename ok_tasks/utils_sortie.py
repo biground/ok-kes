@@ -597,15 +597,12 @@ def handle_member_selection(task: TriggerTask):
 
 
 def handle_ether_supply(task: TriggerTask):
-    """以太补充页面: 根据配置决定是否使用体力。"""
+    """以太补充页面: 提示用户手动补充以太。"""
     box = find_box_at_point(task, 0.502, 0.139)
-    if box and box.name == "以太补充":
-        task.log_info("检测到以太补充页面")
-        if _get_config_value(task, '使用体力药', False):
-            task.click(0.669, 0.808)
-            task.sleep(1)
-        else:
-            task.click(0.347, 0.803)
+    if box and box.name == _get_game_text(task, '以太补充'):
+        task.log_info("检测到以太补充页面，请手动补充以太后再启动功能")
+        task.click(0.347, 0.803)
+        task.sleep(0.5)
         return True
     return False
 
@@ -869,11 +866,11 @@ PAGE_HANDLERS = [
 
     handle_equipment, #装备选择
     handle_card_assign,
+    handle_ether_supply,
     handle_confirm, #确认按钮
     handle_convert, #转换按钮
     handle_shop, #德朗商店
     handle_rest_sortie, #休息/商店入口
-    handle_ether_supply,
     handle_close_button, #关闭按钮
     handle_remove, #移除按钮
     handle_flash, #闪光按钮

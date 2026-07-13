@@ -159,10 +159,13 @@ def _card_has_type_below(task: TriggerTask, box):
     TYPE_KEYWORDS = {"攻击", "强化", "技能", "技", "咒术", "诅咒",
                      "攻", "击", "基础", "基本", "状态", "异常"}
     box_bottom_y = (box.y + box.height) / task.height
+    box_cx = (box.x + box.width / 2) / task.width
     for b in task.all_texts:
-        by = (b.y + b.height / 2) / task.height
-        dy = by - box_bottom_y
-        if -0.005 <= dy <= 0.040 and len(b.name) <= 4:
+        cx = (b.x + b.width / 2) / task.width
+        cy = (b.y + b.height / 2) / task.height
+        dy = cy - box_bottom_y
+        dx = abs(cx - box_cx)
+        if -0.005 <= dy <= 0.040 and dx <= 0.045 and len(b.name) <= 4:
             for kw in TYPE_KEYWORDS:
                 if kw in b.name:
                     return True
@@ -172,10 +175,13 @@ def _card_has_type_below(task: TriggerTask, box):
 def _card_has_base_type_below(task: TriggerTask, box):
     """判断卡牌下方的类型标签是否包含'基础'或'基本'。"""
     box_bottom_y = (box.y + box.height) / task.height
+    box_cx = (box.x + box.width / 2) / task.width
     for b in task.all_texts:
-        by = (b.y + b.height / 2) / task.height
-        dy = by - box_bottom_y
-        if -0.005 <= dy <= 0.040 and len(b.name) <= 4:
+        cx = (b.x + b.width / 2) / task.width
+        cy = (b.y + b.height / 2) / task.height
+        dy = cy - box_bottom_y
+        dx = abs(cx - box_cx)
+        if -0.005 <= dy <= 0.040 and dx <= 0.045 and len(b.name) <= 4:
             if "基础" in b.name or "基本" in b.name:
                 return True
     return False
@@ -241,8 +247,8 @@ def select_card(task: TriggerTask, card_names, max_scrolls=5, fallback_delete=Fa
             ]
             # 如果是移除操作且启用了优先移除基础牌
             if is_remove_priority_base:
-                # 先从当前区域找基础牌
-                base_card = next((c for c in cards if _card_has_base_type_below(task, c)), None)
+                # 先从当前区域找基础牌（从后往前优先）
+                base_card = next((c for c in reversed(cards) if _card_has_base_type_below(task, c)), None)
                 if base_card:
                     fallback_card = base_card
                     task.log_info(f"select_card fallback 优先选择基础牌: 「{base_card.name}」")
@@ -261,7 +267,7 @@ def select_card(task: TriggerTask, card_names, max_scrolls=5, fallback_delete=Fa
                             and _is_valid_card_name(b.name)
                             and _card_has_type_below(task, b)
                         ]
-                        base_card = next((c for c in up_cards if _card_has_base_type_below(task, c)), None)
+                        base_card = next((c for c in reversed(up_cards) if _card_has_base_type_below(task, c)), None)
                         if base_card:
                             task.log_info(f"select_card fallback 向上翻找到基础牌: 「{base_card.name}」")
                             task.click_box(base_card)

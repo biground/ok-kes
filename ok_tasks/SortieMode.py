@@ -24,7 +24,6 @@ class SortieMode(TriggerTask):
         self.default_config["复制卡牌列表"] = ["剑雨", "展开极光", "一缕光芒","缕光芒"]
         self.default_config["闪光卡牌列表"] = ["剑雨", "展开极光", "一缕光芒","缕光芒"]
         self.default_config["领取奖励"] = False
-        self.default_config["使用体力药"] = False
         self.default_config["出牌优先级"] = ["剑雨", "水之源", "一缕光芒", "万众英雄","极光剑", "展开极光","解放极光"]
         self.default_config["丢弃卡牌优先级"] = ["展开极光", "极光剑", "凝聚极光"]
         self.default_config["进入商店"] = False
