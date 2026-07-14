@@ -1071,13 +1071,13 @@ def handle_leave(task: TriggerTask):
             return False
     return False
 def handle_next_step(task: TriggerTask):
-    """通用"下一步"按钮: 在区域(0.833,0.885,0.954,0.957)内检测文本，编辑距离<=1即匹配。"""
+    """通用"下一步"按钮: 在区域(0.833,0.885,0.954,0.957)内检测文本，编辑距离<=2即匹配。"""
     x1, y1, x2, y2 = 0.833, 0.885, 0.954, 0.957
     for b in task.all_texts:
         cx = (b.x + b.width / 2) / task.width
         cy = (b.y + b.height / 2) / task.height
         if x1 <= cx <= x2 and y1 <= cy <= y2:
-            if _edit_distance(b.name, "下一步"):
+            if _edit_distance(b.name, "下一步", max_dist=2):
                 task.log_info(f"检测到下一步按钮「{b.name}」，点击")
                 task.click_box(b)
                 task.sleep(1)

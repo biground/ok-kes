@@ -266,6 +266,7 @@ PAGE_HANDLERS = [
     log_credit,
     handle_stuck_log, #画面卡住检测，仅输出日志
 
+    handle_center_confirm, #页面中央确认按钮
     handle_equipment, #装备选择
     handle_card_assign,
     handle_confirm, #确认按钮
@@ -293,7 +294,6 @@ PAGE_HANDLERS = [
     handle_battle_crash,
     handle_battle_auto_check,
     handle_close_page,
-    handle_center_confirm,
     handle_settlement,
     handle_destiny_choice,
     handle_main_member_flash,

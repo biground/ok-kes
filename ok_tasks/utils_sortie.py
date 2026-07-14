@@ -882,9 +882,10 @@ PAGE_HANDLERS = [
     log_credit,
     handle_stuck_log,
 
+    handle_ether_supply,
+    handle_center_confirm,
     handle_equipment, #装备选择
     handle_card_assign,
-    handle_ether_supply,
     handle_confirm, #确认按钮
     handle_convert, #转换按钮
     handle_shop, #德朗商店
@@ -912,7 +913,6 @@ PAGE_HANDLERS = [
     handle_weakness_info,
     handle_battle_page,
     handle_close_page,
-    # handle_center_confirm,
     handle_settlement,
     handle_destiny_choice,
     handle_main_member_flash,
