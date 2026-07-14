@@ -166,7 +166,7 @@ def handle_data_collected(task: TriggerTask):
                     task.sleep(1)
                     return True
         task.log_info("检测到存储数据收集完成，由通用按钮处理")
-        return True
+        return False
     return False
 
 
