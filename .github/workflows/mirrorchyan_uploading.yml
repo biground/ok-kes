@@ -10,20 +10,20 @@ on:
 jobs:
   mirrorchyan:
     runs-on: macos-latest
-    if: ${{ github.repository_owner == 'ok-oldking' }}
+    if: ${{ github.repository_owner == 'baoxin1100' }}
 
     steps:
       - uses: MirrorChyan/uploading-action@v1
         with:
           filetype: latest-release
-          filename: "ok-py-win32-China-setup.exe"
-          mirrorchyan_rid: ok-py
+          filename: "ok-kes-win32-portable-*.exe"
+          mirrorchyan_rid: ok-kes
           tag: ${{ inputs.tag }}
 
-          os: ${{ matrix.os }}
-          arch: ${{ matrix.arch }}
+          os: win
+          arch: x64
 
-          owner: ok-oldking
-          repo: ok-py
+          owner: baoxin1100
+          repo: ok-kes
           github_token: ${{ secrets.GITHUB_TOKEN }}
           upload_token: ${{ secrets.MirrorChyanUploadToken }}
