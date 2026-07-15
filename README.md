@@ -44,9 +44,7 @@
 
 ## 📥 下载渠道
 
-* **[GitHub](https://github.com/baoxin1100/ok-kes/releases)**: 官方发布页。（**请下载 `卡厄思自动化工具v*.exe` 文件，而不是 `Source Code` 源码压缩包**）
-* **[夸克网盘](https://pan.quark.cn/s/8039ba265d12?pwd=ZDJ8)**: 国内网盘，免费，但需要注册并使用其客户端下载。
-* **[百度网盘](https://pan.baidu.com/s/1LwsMa1VQ6A-QrKjp63dZsg?pwd=jyr6)**: 国内网盘，需要注册并使用其客户端下载。
+* **[GitHub](https://github.com/baoxin1100/ok-kes/releases)**: 官方发布页。（**请下载 `ok-kes-win32-portable-v*.exe` 文件，而不是 `Source Code` 源码压缩包**）
 
 ## ✨ 主要功能
 
