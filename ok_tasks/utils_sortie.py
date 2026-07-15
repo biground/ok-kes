@@ -275,7 +275,7 @@ def _select_battle_member(task: TriggerTask, max_scrolls=5):
             task.log_info(f"第{scroll_index + 1}次未匹配到任何优先级角色, 向下滚动重试")
             task.scroll_relative(0.5, 0.7, -3)
             task.sleep(0.5)
-            task.all_texts = task.ocr()
+            task.all_texts = _simplify_texts(task.ocr())
     boxes = _battle_member_boxes(task)
     if not boxes:
         task.log_info("出战主战员列表为空，无法选择")
@@ -576,7 +576,7 @@ def handle_member_selection(task: TriggerTask):
             task.click(slot["x"], slot["refresh_y"])
             task.sleep(1)
         task.sleep(1)
-        task.all_texts = task.ocr()
+        task.all_texts = _simplify_texts(task.ocr())
         slots = _read_member_slots(task)
         for name in priority:
             chosen = next((slot for slot in slots if name in slot["name"] and not_blacklisted(slot)), None)
