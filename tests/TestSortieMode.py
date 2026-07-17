@@ -41,6 +41,9 @@ class _Signal:
 
 
 class _TriggerTask:
+    def __init__(self, *args, **kwargs):
+        self.default_config = {}
+
     def fix_texts(self, boxes):
         for box in boxes:
             box.name = box.name.replace('擊', '击')
@@ -149,6 +152,66 @@ class TestSortieLanguageDetection(unittest.TestCase):
         self.assertEqual([], config.write_calls)
         self.assertEqual(0, self.signal.calls)
         self.assertEqual(1, len(task.ocr_calls))
+
+    def test_default_destiny_priority_order(self):
+        task = self.module.SortieMode()
+
+        self.assertEqual([
+            "丢弃诅咒",
+            "移除的印记",
+            "仓促移除",
+            "轻盈的步伐",
+            "轻量化",
+            "切换战术",
+            "战场武器",
+            "守护盔甲",
+            "生命的装饰",
+            "受诅咒的遗物",
+            "未来装备",
+            "神圣锻造",
+            "稀有装备专家",
+            "敏捷的武装",
+            "稀有装备收藏家",
+            "收集扭曲",
+            "收集调节",
+            "精通：扭曲",
+            "精通：调节",
+            "靈機一動的靈感",
+            "受诅咒的灵感",
+            "意识重构",
+            "神圣灵感",
+            "维托的祝福",
+            "戴奥斯的祝福",
+            "赛克瑞德的祝福",
+            "凯尔肯的祝福",
+            "尼希隆的祝福",
+            "卡利戈的祝福",
+            "小小的奖励",
+            "未知的引导",
+            "黄金命运",
+            "约定的命运",
+            "银色的引导",
+            "不稳定的契约",
+            "无尽的贪婪",
+            "粘稠的信用点数",
+            "常客的特权",
+            "强化攻势",
+            "刹那的休息",
+            "守护姿态",
+            "集中攻势",
+            "21",
+            "翻涌的水波",
+            "事前准备",
+            "超出负荷的洞察",
+            "点燃冲动",
+            "不幸的否定",
+            "最终幕",
+            "红色命运",
+            "蓝色命运",
+            "优秀的调节",
+            "唯一的审判者",
+            "两条岔路",
+        ], task.default_config["命运优先级"])
 
 
 if __name__ == '__main__':

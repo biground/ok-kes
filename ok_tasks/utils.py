@@ -4,6 +4,7 @@ import re
 import json
 import random
 import time
+import unicodedata
 import cv2
 import os
 import numpy as np
@@ -142,6 +143,14 @@ def _clean_match(name, target):
     """去除OCR文本中的非中文/字母/数字符号后比较是否等于 target。"""
     cleaned = re.sub(r'[^\u4e00-\u9fff\w]', '', name)
     return cleaned == target
+
+
+def _normalize_destiny_title(title):
+    """仅用于命运标题的精确匹配：繁转简后忽略标点、空白和全半角。"""
+    if not isinstance(title, str):
+        return ''
+    title = unicodedata.normalize('NFKC', _cc.convert(title))
+    return ''.join(char for char in title if not char.isspace() and not unicodedata.category(char).startswith('P'))
 
 
 def _is_valid_card_name(name):
@@ -559,7 +568,7 @@ def handle_skip(task: TriggerTask):
 
 
 def handle_destiny_choice(task: TriggerTask):
-    """命运选择奖励页面: 随机选择一个命运标题。"""
+    """命运选择奖励页面: 出击模式按标题优先级选择，未命中时随机选择。"""
     box = find_box_at_point(task, 0.499, 0.932)
     if box and _get_game_text(task, '请选择你的命运') in box.name:
         task.log_info("检测到命运选择奖励，进行相应操作")
@@ -572,7 +581,7 @@ def handle_destiny_choice(task: TriggerTask):
         #     if is_button_active(task, confirm_box):
         #         task.log_info("确认按钮已激活，跳过选择（由其他逻辑处理确认）")
         #         return False  # 按钮已激活，不处理，让其他逻辑点击确认
-        # 在命运标题区域随机选择一个
+        # 在命运标题区域收集标题，不读取卡片描述。
         titles = [
             b for b in task.all_texts
             if 0.202 <= (b.x + b.width / 2) / task.width <= 0.800
@@ -581,8 +590,20 @@ def handle_destiny_choice(task: TriggerTask):
             and b.name not in ["确认", "返回", "跳过"]
         ]
         if titles:
-            chosen = random.choice(titles)
-            task.log_info(f"随机选择命运: {chosen.name}")
+            chosen = None
+            if getattr(task, 'name', None) == "自动出击模式":
+                for priority_title in _get_card_list(task, "命运优先级"):
+                    normalized_priority = _normalize_destiny_title(priority_title)
+                    chosen = next(
+                        (title for title in titles if normalized_priority and normalized_priority == _normalize_destiny_title(title.name)),
+                        None,
+                    )
+                    if chosen:
+                        task.log_info(f"按命运优先级选择: {chosen.name}（配置: {priority_title}）")
+                        break
+            if chosen is None:
+                chosen = random.choice(titles)
+                task.log_info(f"随机选择命运: {chosen.name}")
             task.click_box(chosen)
             task.sleep(1)
             # 选择命运后不点击确认按钮，返回False让其他逻辑处理
