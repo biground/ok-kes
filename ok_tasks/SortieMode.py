@@ -5,6 +5,8 @@ from opencc import OpenCC
 from config_io import make_export_callback, make_import_callback
 
 _cc = OpenCC('t2s')  # 繁转简，用于OCR文本统一转换
+_SORTIE_ENTRY_TITLE_AREA = (0.65, 0.10, 0.75, 0.18)
+_GAME_LANGUAGE_BY_SORTIE_TITLE = {'出击': '简体中文', '出擊': '繁体中文'}
 
 
 class SortieMode(TriggerTask):
@@ -57,7 +59,39 @@ class SortieMode(TriggerTask):
             b.name = _cc.convert(b.name)
         return texts
 
+    def fix_texts(self, detected_boxes):
+        if not getattr(self, '_preserve_raw_ocr', False):
+            super().fix_texts(detected_boxes)
+
+    def _detect_game_language(self):
+        if getattr(self, '_game_language_detected', False):
+            return
+        self._preserve_raw_ocr = True
+        try:
+            title_boxes = self.ocr(*_SORTIE_ENTRY_TITLE_AREA, threshold=0.8)
+        finally:
+            self._preserve_raw_ocr = False
+        titles = {
+            box.name for box in title_boxes or []
+            if getattr(box, 'confidence', 0) >= 0.8 and box.name in _GAME_LANGUAGE_BY_SORTIE_TITLE
+        }
+        if len(titles) != 1:
+            return
+        evidence = titles.pop()
+        new_language = _GAME_LANGUAGE_BY_SORTIE_TITLE[evidence]
+        language_config = self.executor.global_config.get_config('游戏语言')
+        old_language = language_config.get('游戏语言', '简体中文')
+        self._game_language_detected = True
+        self.log_info(
+            f'自动检测游戏语言：检测依据「{evidence}」，旧值「{old_language}」，新值「{new_language}」'
+        )
+        if old_language != new_language:
+            language_config['游戏语言'] = new_language
+            from ok.gui.Communicate import communicate
+            communicate.task_list_updated.emit()
+
     def run(self):
+        self._detect_game_language()
         self.all_texts = self._ocr_and_simplify()
         for handle_page in utils_sortie.PAGE_HANDLERS:
             if handle_page(self):
