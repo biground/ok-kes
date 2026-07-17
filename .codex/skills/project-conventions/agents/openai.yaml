@@ -1,0 +1,4 @@
+interface:
+  display_name: "ok-kes 项目约定"
+  short_description: "维护 ok-kes 自动化模式、OCR 文本映射和配置持久化约定"
+  default_prompt: "Use $project-conventions to modify ok-kes automation safely."
