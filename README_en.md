@@ -53,7 +53,7 @@ This software is open-source and free, intended for personal learning and commun
 - ⚔️ **Member Selection**: Auto select battle members based on priority configuration
 - 🛣️ **Route Selection**: Intelligent node type recognition, auto advance by priority
 - 🏪 **Shop Handling**: Auto enter Derang Shop to remove cards
-- 💊 **Ether Supply Detection**: Detect low stamina and exit automatically
+- 💊 **Ether Supply Detection**: Stop the sortie task automatically when stamina is insufficient
 - Fully customizable card priorities, remove/copy/flash lists, etc.
 
 ### Chaos Mode (卡厄思模式)
@@ -76,6 +76,7 @@ This software is open-source and free, intended for personal learning and commun
 ### General Features
 - 🖥️ **High-Resolution Support**: Supports 1920x1080 / 1600x900 / 1280x720 and other 16:9 resolutions
 - 🔄 **Background Mode**: Supports running in the background while the game window is minimized or obscured
+- 📱 **ADB Device Mode**: Captures Android phones/emulators and injects taps, swipes, and key events through ADB
 - 🌏 **Multi-Language Support**: Supports Simplified Chinese and Traditional Chinese game clients (set "Game Language" in the bottom-left settings page)
   <img src="docs/images/image_2.png" alt="International Server Language Setting" />
 
@@ -85,6 +86,17 @@ This software is open-source and free, intended for personal learning and commun
 2. **Auto Battle**: Depends on keybind recognition; enable shortcut key display in game settings for better accuracy
 3. **Chaos Mode**: Enable auto-battle and auto-story features within the game
 4. **Story Mode**: Manually enable Sortie Mode for battle stages; manually enable Chaos Mode for chaos stages; battle stage teams must be configured manually
+
+### ADB Device Mode
+
+1. Enable Developer Options and USB debugging on the Android device, connect it by USB, and accept the debugging authorization prompt.
+2. Open the game manually, use a landscape 16:9 resolution, and keep the device unlocked.
+3. Refresh the device list on the app's home page. Authorized devices appear as "Android Connected"; unauthorized, offline, or missing devices show a troubleshooting row at the top of the list.
+4. If the row says USB debugging is unauthorized, unlock the phone, select "Always allow" in the USB debugging prompt, tap "Allow", and refresh again.
+5. For wireless ADB, pair and connect the device with the system ADB tools first, then refresh the device list in the app.
+
+ADB mode does not change the device resolution or launch a channel-specific game package. Make sure the game is in the foreground before starting a task.
+Phone screenshots can be wider than 16:9. Phone mode skips the Windows-only 16:9 startup gate while retaining the framework's widescreen coordinate adaptation.
 
 ## 🔧 Troubleshooting
 

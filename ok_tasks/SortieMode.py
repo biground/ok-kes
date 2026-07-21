@@ -3,6 +3,18 @@ from ok import TriggerTask, og
 import utils_sortie
 from opencc import OpenCC
 from config_io import make_export_callback, make_import_callback
+from character_profiles import (
+    BATTLE_MEMBER_KEY,
+    CONFIGURED_CARDS_KEY,
+    MAIN_MEMBER_KEY,
+    PROFILE_CARD_SOURCES_KEY,
+    load_task_profiles,
+    make_character_selection_callback,
+    make_export_profiles_callback,
+    make_import_profiles_callback,
+    make_manage_profiles_callback,
+    sync_task_character_cards,
+)
 
 _cc = OpenCC('t2s')  # 繁转简，用于OCR文本统一转换
 _SORTIE_ENTRY_TITLE_AREA = (0.65, 0.10, 0.75, 0.18)
@@ -20,8 +32,10 @@ class SortieMode(TriggerTask):
         self.all_texts = []
         self.default_config["_enabled"] = False
         self.default_config["路线优先级"] = ["休息", "事件", "小怪", "boss"]
-        self.default_config["主战员优先级"] = ["米卡", "尼娅", "蒂菲拉", "麦格纳", "卡修斯"]
-        self.default_config["出战主战员优先级"] = ["海德玛丽", "九", "力", "绯"]
+        self.default_config[MAIN_MEMBER_KEY] = ["米卡", "尼娅", "蒂菲拉", "麦格纳", "卡修斯"]
+        self.default_config[BATTLE_MEMBER_KEY] = ["海德玛丽", "九", "力", "绯"]
+        self.default_config[CONFIGURED_CARDS_KEY] = []
+        self.default_config[PROFILE_CARD_SOURCES_KEY] = {}
         self.default_config["获得卡牌优先级"] = ["展开极光", "剑雨", "一缕光芒","缕光芒","凝聚极光"]
         self.default_config["移除卡牌列表"] = ["剑幕"]
         self.default_config["复制卡牌列表"] = ["剑雨", "展开极光", "一缕光芒","缕光芒"]
@@ -49,10 +63,64 @@ class SortieMode(TriggerTask):
         # self.default_config["从右往左出牌"] = True
         self.node_status = {"shop": False, "flash_or_rest": False}
 
+        self.config_description.update({
+            MAIN_MEMBER_KEY: "可继续手工输入任意 OCR 名称，也可通过下方按钮从角色档案选择。",
+            BATTLE_MEMBER_KEY: "可继续手工输入任意 OCR 名称；已在主战员中选择的档案角色会被排除。",
+            CONFIGURED_CARDS_KEY: (
+                "根据主战员和出战主战员中已配置的角色自动维护。"
+                "新增角色时卡牌追加到末尾，删除角色时移除其卡牌；可手工调整已有顺序或补充额外卡牌。"
+            ),
+            "获得卡牌优先级": "此操作专用优先级排在自动生成的“配置卡牌”之前。",
+            "移除卡牌列表": "此操作专用优先级排在自动生成的“配置卡牌”之前。",
+            "复制卡牌列表": "此操作专用优先级排在自动生成的“配置卡牌”之前。",
+            "闪光卡牌列表": "此操作专用优先级排在自动生成的“配置卡牌”之前。",
+            "出牌优先级": "此操作专用优先级排在自动生成的“配置卡牌”之前。",
+            "丢弃卡牌优先级": "此操作专用优先级排在自动生成的“配置卡牌”之前。",
+            "角色档案": "独立保存在配置目录的 sortie_character_profiles.json，不包含在普通配置编码中。",
+            "角色优先级选择": "从角色档案勾选角色；原优先级列表仍支持任意字符串。",
+        })
         self.config_type = {
+            '角色档案': {
+                'type': 'button',
+                'buttons': [
+                    {'text': '管理角色档案', 'callback': make_manage_profiles_callback(self)},
+                    {'text': '导入角色档案', 'callback': make_import_profiles_callback(self)},
+                    {'text': '导出角色档案', 'callback': make_export_profiles_callback(self)},
+                ],
+            },
+            '角色优先级选择': {
+                'type': 'button',
+                'buttons': [
+                    {
+                        'text': '选择主战员',
+                        'callback': make_character_selection_callback(
+                            self, MAIN_MEMBER_KEY, BATTLE_MEMBER_KEY
+                        ),
+                    },
+                    {
+                        'text': '选择出战主战员',
+                        'callback': make_character_selection_callback(
+                            self, BATTLE_MEMBER_KEY, MAIN_MEMBER_KEY
+                        ),
+                    },
+                ],
+            },
             'export_config': {'type': 'button', 'text': '导出配置', 'callback': make_export_callback(self)},
-            'import_config': {'type': 'button', 'text': '导入配置', 'callback': make_import_callback(self)},
+            'import_config': {
+                'type': 'button',
+                'text': '导入配置',
+                'callback': make_import_callback(self, after_import=self.on_config_imported),
+            },
         }
+
+    def on_create(self):
+        super().on_create()
+        load_task_profiles(self, create=True)
+        sync_task_character_cards(self)
+
+    def on_config_imported(self):
+        """普通配置导入后重新应用角色互斥和卡牌同步。"""
+        sync_task_character_cards(self, notify=True)
 
     def enable(self):
         """开启出击模式时自动禁用卡厄思模式。"""
@@ -101,6 +169,7 @@ class SortieMode(TriggerTask):
             communicate.task_list_updated.emit()
 
     def run(self):
+        sync_task_character_cards(self)
         self._detect_game_language()
         self.all_texts = self._ocr_and_simplify()
         for handle_page in utils_sortie.PAGE_HANDLERS:

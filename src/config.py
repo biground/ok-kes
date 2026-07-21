@@ -82,9 +82,9 @@ config = {
         'force_no_hdr': False, #True=当用户开启AutoHDR时候禁止使用
         'require_bg': True # 要求使用后台截图
     },
-    'adb': {  # Windows游戏请填写此设置, mumu模拟器使用原生截图和input,速度极快. 其他模拟器和真机使用adb,截图速度较慢
-        # optional, if set, will start the pacakge and ensure installed
-        #'packages': ['com.abc.efg1', 'com.abc.efg1']
+    'adb': {  # Android真机和模拟器模式，自动发现已授权的ADB设备
+        'packages': [],  # 不绑定渠道包名，运行任务前由用户打开游戏
+        'capture_method': 'adb',
     },
     'start_timeout': 120,  # default 60
     'window_size': { #ok-script窗口大小

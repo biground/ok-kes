@@ -7,6 +7,7 @@ import time
 import unicodedata
 import cv2
 import os
+import sys
 import numpy as np
 from opencc import OpenCC
 
@@ -50,25 +51,65 @@ def _get_config_value(task: TriggerTask, key, default):
     return value
 
 
+_PROFILE_AWARE_CARD_KEYS = {
+    "获得卡牌优先级",
+    "移除卡牌列表",
+    "复制卡牌列表",
+    "闪光卡牌列表",
+    "出牌优先级",
+    "丢弃卡牌优先级",
+}
+
+
 def _get_card_list(task: TriggerTask, key):
-    """读取列表配置，解析失败返回空列表。"""
+    """读取卡牌列表；出击模式在具体操作优先级后补充已配置角色的卡牌。"""
     value = _get_config_value(task, key, [])
-    return list(value) if isinstance(value, (list, tuple)) else []
+    result = list(value) if isinstance(value, (list, tuple)) else []
+    if key in _PROFILE_AWARE_CARD_KEYS:
+        configured_cards = _get_config_value(task, "配置卡牌", [])
+        if isinstance(configured_cards, (list, tuple)):
+            for card in configured_cards:
+                if card not in result:
+                    result.append(card)
+    return result
 
 
-# 游戏语言 → 映射文件路径
+# 游戏语言 → 映射文件名
 _GAME_LANG_FILE_MAP = {
-    "繁体中文": os.path.join(os.path.dirname(__file__), 'assets', 'game_text_map', 'zh_tw.py'),
+    "繁体中文": 'zh_tw.py',
 }
 # 已加载的映射缓存 {语言: SERVER_TEXT_MAP字典}
 _LOADED_MAPS = {}
 
 
+def _resolve_game_text_map_path(file_name):
+    """兼容源码目录和 PyInstaller 顶层冻结模块的映射文件定位。"""
+    roots = [os.path.dirname(os.path.abspath(__file__))]
+    bundle_root = getattr(sys, '_MEIPASS', None)
+    if bundle_root:
+        roots.append(os.path.abspath(bundle_root))
+
+    checked = set()
+    for root in roots:
+        for relative_path in (
+            os.path.join('assets', 'game_text_map', file_name),
+            os.path.join('ok_tasks', 'assets', 'game_text_map', file_name),
+        ):
+            file_path = os.path.normpath(os.path.join(root, relative_path))
+            if file_path in checked:
+                continue
+            checked.add(file_path)
+            if os.path.isfile(file_path):
+                return file_path
+    return None
+
+
 def _load_game_text_map(game_lang):
     """加载指定语言的映射表（带缓存）。"""
     if game_lang not in _LOADED_MAPS:
-        file_path = _GAME_LANG_FILE_MAP.get(game_lang)
-        if file_path and os.path.exists(file_path):
+        file_name = _GAME_LANG_FILE_MAP.get(game_lang)
+        file_path = _resolve_game_text_map_path(file_name) if file_name else None
+        if file_path:
             try:
                 import importlib.util
                 spec = importlib.util.spec_from_file_location(f"_game_map_{game_lang}", file_path)
@@ -663,15 +704,134 @@ def handle_card_reward(task: TriggerTask):
     return False
 
 
+_EQUIPMENT_SLOT_X_RATIOS = (0.756, 0.828, 0.900)
+_EQUIPMENT_SLOT_NAMES = ("攻击", "防御", "生命")
+_EQUIPMENT_SLOT_OCCUPIED_THRESHOLD = 0.18
+
+
+def _detect_equipment_slot_index(task: TriggerTask):
+    """根据装备详情中的主属性判断装备对应的槽位。"""
+    stat_to_slot = {
+        "攻击": 0,
+        "攻击力": 0,
+        "防御": 1,
+        "防御力": 1,
+        "生命": 2,
+        "生命值": 2,
+        "生命力": 2,
+    }
+    for box in task.all_texts:
+        center_x = (box.x + box.width / 2) / task.width
+        center_y = (box.y + box.height / 2) / task.height
+        if not (0.08 <= center_x <= 0.58 and 0.20 <= center_y <= 0.78):
+            continue
+        text = _cc.convert(str(box.name)).strip()
+        text = re.sub(r"[\s\d+＋:：.,，-]", "", text)
+        if text in stat_to_slot:
+            return stat_to_slot[text]
+    return None
+
+
+def _equipment_slot_score(task: TriggerTask, row_center_y, slot_index):
+    """返回装备槽内彩色亮像素占比；空槽通常只有灰色类型轮廓。"""
+    frame = getattr(task, "frame", None)
+    if frame is None or getattr(frame, "size", 0) == 0:
+        return None
+
+    frame_height, frame_width = frame.shape[:2]
+    center_x = int(_EQUIPMENT_SLOT_X_RATIOS[slot_index] * frame_width)
+    center_y = int(row_center_y / task.height * frame_height)
+    half_width = max(2, int(0.018 * frame_width))
+    half_height = max(2, int(0.030 * frame_height))
+
+    x1 = max(0, center_x - half_width)
+    x2 = min(frame_width, center_x + half_width + 1)
+    y1 = max(0, center_y - half_height)
+    y2 = min(frame_height, center_y + half_height + 1)
+    region = frame[y1:y2, x1:x2, :3]
+    if region.size == 0:
+        return None
+
+    hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
+    saturation = hsv[:, :, 1]
+    value = hsv[:, :, 2]
+    colored_bright = (saturation >= 40) & (value >= 60)
+    return float(np.count_nonzero(colored_bright) / colored_bright.size)
+
+
+def _choose_equipment_combatant(task: TriggerTask, level_boxes):
+    """优先选择当前装备槽为空的战斗员，识别失败时按整行装备数兜底。"""
+    target_slot = _detect_equipment_slot_index(task)
+    rows = []
+    for box in level_boxes:
+        row_center_y = box.y + box.height / 2
+        scores = [
+            _equipment_slot_score(task, row_center_y, slot_index)
+            for slot_index in range(len(_EQUIPMENT_SLOT_X_RATIOS))
+        ]
+        if any(score is None for score in scores):
+            task.log_info("装备槽画面不可用，回退随机选择战斗员")
+            return random.choice(level_boxes)
+        occupied = [score >= _EQUIPMENT_SLOT_OCCUPIED_THRESHOLD for score in scores]
+        rows.append({
+            "box": box,
+            "scores": scores,
+            "occupied": occupied,
+            "occupied_count": sum(occupied),
+        })
+
+    slot_name = _EQUIPMENT_SLOT_NAMES[target_slot] if target_slot is not None else "未知"
+    row_summary = [
+        f"y={int(row['box'].y)}:"
+        f"{''.join('1' if value else '0' for value in row['occupied'])}"
+        f"({','.join(f'{score:.2f}' for score in row['scores'])})"
+        for row in rows
+    ]
+    task.log_info(f"装备槽识别: 当前类型={slot_name}, 战斗员槽位={row_summary}")
+
+    if target_slot is not None:
+        empty_target_rows = [row for row in rows if not row["occupied"][target_slot]]
+        if empty_target_rows:
+            minimum_count = min(row["occupied_count"] for row in empty_target_rows)
+            candidates = [
+                row for row in empty_target_rows
+                if row["occupied_count"] == minimum_count
+            ]
+            chosen = random.choice(candidates)["box"]
+            task.log_info(
+                f"优先选择未穿戴{slot_name}装备的战斗员: "
+                f"位置 y={chosen.y}, 已穿戴{minimum_count}件"
+            )
+            return chosen
+
+        task.log_info(f"所有战斗员均已穿戴{slot_name}装备，回退随机选择")
+        return random.choice(level_boxes)
+
+    empty_rows = [row for row in rows if row["occupied_count"] == 0]
+    if empty_rows:
+        chosen = random.choice(empty_rows)["box"]
+        task.log_info(f"装备类型未识别，优先选择未穿戴任何装备的战斗员: 位置 y={chosen.y}")
+        return chosen
+
+    minimum_count = min(row["occupied_count"] for row in rows)
+    candidates = [row for row in rows if row["occupied_count"] == minimum_count]
+    chosen = random.choice(candidates)["box"]
+    task.log_info(
+        f"装备类型未识别，选择当前穿戴装备最少的战斗员: "
+        f"位置 y={chosen.y}, 已穿戴{minimum_count}件"
+    )
+    return chosen
+
+
 def handle_equipment(task: TriggerTask):
-    """装备选择/安装界面: 区分安装装备和选择装备。"""
+    """装备选择/安装界面: 优先安装给对应槽位为空的战斗员。"""
     box = find_box_at_point(task, 0.499, 0.126)
     if box and box.name == "装备":
         task.log_info("检测到装备页面")
         # 判断是否为安装装备界面（选择主战员）
         equip_hint = find_box_at_point(task, 0.921, 0.135)
         if equip_hint and _get_game_text(task, '请选择主战员') in equip_hint.name:
-            task.log_info("检测到安装装备界面，随机选择主战员")
+            task.log_info("检测到安装装备界面，优先选择未穿戴装备的战斗员")
             px1, py1 = int(0.609 * task.width), int(0.290 * task.height)
             px2, py2 = int(0.652 * task.width), int(0.789 * task.height)
             lv_texts = sorted(
@@ -681,8 +841,7 @@ def handle_equipment(task: TriggerTask):
                 key=lambda b: b.y
             )
             if lv_texts:
-                chosen = random.choice(lv_texts)
-                task.log_info(f"随机选择主战员: 位置 y={chosen.y}")
+                chosen = _choose_equipment_combatant(task, lv_texts)
                 task.click(0.756, (chosen.y + chosen.height / 2) / task.height)
                 task.sleep(1)
                 # task.click(0.884, 0.931)
@@ -707,6 +866,7 @@ _SELECT_CARD_CONFIG_KEYS = {
     "复制": "复制卡牌列表",
     "闪光": "闪光卡牌列表",
     "灵光一闪": "闪光卡牌列表",
+    "丢弃": "丢弃卡牌优先级",
 }
 
 
@@ -715,7 +875,7 @@ def handle_select_card(task: TriggerTask):
     box = find_box_at_point(task, 0.198, 0.039)
     if not box:
         return False
-    m = re.search(r'请选择(\d*)张*.*?(移除|复制|闪光|灵光一闪).*?卡牌', box.name)
+    m = re.search(r'请选择(\d*)张*.*?(移除|复制|闪光|灵光一闪|丢弃).*?卡牌', box.name)
     if not m:
         return False
     count_text = m.group(1)
@@ -900,6 +1060,32 @@ def handle_equipment_recast(task: TriggerTask):
     return False
 
 
+_FORCED_SORTIE_PERFORMANCE_EVENT_TITLES = frozenset({
+    "询问是谁",
+    "请求演奏",
+    "请求共鸣之曲",
+})
+_FORCED_SORTIE_PERFORMANCE_TITLE = "请求演奏"
+
+
+def _find_forced_sortie_event_task(task: TriggerTask, tasks_info):
+    """自动出击遇到指定三选项组合时，按标题锁定“请求演奏”。"""
+    if getattr(task, "name", None) != "自动出击模式" or len(tasks_info) != 3:
+        return None
+
+    normalized_tasks = {
+        _normalize_destiny_title(item["title"]): item
+        for item in tasks_info
+    }
+    normalized_expected = {
+        _normalize_destiny_title(title)
+        for title in _FORCED_SORTIE_PERFORMANCE_EVENT_TITLES
+    }
+    if set(normalized_tasks) != normalized_expected:
+        return None
+    return normalized_tasks[_normalize_destiny_title(_FORCED_SORTIE_PERFORMANCE_TITLE)]
+
+
 def handle_event_task(task: TriggerTask):
     """事件任务页面: 识别标题+描述区域，按任务优先级匹配描述选择推进。"""
     rewards = task.find_feature(feature_name="taskreward")
@@ -982,25 +1168,29 @@ def handle_event_task(task: TriggerTask):
     for t in tasks_info:
         task.log_info(f"  标题: {t['title']} | 描述: {t['description']}")
 
-    # 检查任务区域中是否有 treasure 特征
-    treasure_box = task.box_of_screen(0.477, 0.336, 0.841, 0.540)
-    treasure_features = task.find_feature(feature_name="treasure", box=treasure_box)
-    if treasure_features:
-        task.log_info("检测到事件任务区域中有treasure特征，优先点击")
-        task.click_box(treasure_features[0])
-        task.sleep(2)
-        return True
+    chosen = _find_forced_sortie_event_task(task, tasks_info)
+    if chosen is not None:
+        task.log_info("命中特定事件组合，强制选择: 请求演奏")
+    else:
+        # 检查任务区域中是否有 treasure 特征
+        treasure_box = task.box_of_screen(0.477, 0.336, 0.841, 0.540)
+        treasure_features = task.find_feature(feature_name="treasure", box=treasure_box)
+        if treasure_features:
+            task.log_info("检测到事件任务区域中有treasure特征，优先点击")
+            task.click_box(treasure_features[0])
+            task.sleep(2)
+            return True
 
     priority = _get_config_value(task, '任务优先级', [])
-    chosen = None
-    for keyword in priority:
-        for t in tasks_info:
-            if keyword in t['description']:
-                chosen = t
-                task.log_info(f"优先选择「{keyword}」-> 标题: {t['title']}, 描述: {t['description']}")
+    if chosen is None:
+        for keyword in priority:
+            for t in tasks_info:
+                if keyword in t['description']:
+                    chosen = t
+                    task.log_info(f"优先选择「{keyword}」-> 标题: {t['title']}, 描述: {t['description']}")
+                    break
+            if chosen is not None:
                 break
-        if chosen is not None:
-            break
 
     if chosen is None:
         chosen = random.choice(tasks_info)

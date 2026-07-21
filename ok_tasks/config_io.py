@@ -80,7 +80,7 @@ def make_export_callback(task):
     return export
 
 
-def make_import_callback(task):
+def make_import_callback(task, after_import=None):
     """生成导入配置按钮的回调函数。"""
     def import_config():
         from PySide6.QtWidgets import QInputDialog, QMessageBox, QApplication
@@ -95,6 +95,8 @@ def make_import_callback(task):
         text = text.strip()
         success = _import_config_from_text(task, text)
         if success:
+            if callable(after_import):
+                after_import()
             QMessageBox.information(None, "导入成功", "配置已成功导入并应用！")
             task.log_info("配置导入成功")
         else:

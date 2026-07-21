@@ -1,4 +1,5 @@
 ok-script
+adbutils==2.12.0
 onnxocr-ppocrv4==0.0.5
 openvino
 opencv-python

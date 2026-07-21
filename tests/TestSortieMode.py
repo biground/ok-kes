@@ -43,6 +43,7 @@ class _Signal:
 class _TriggerTask:
     def __init__(self, *args, **kwargs):
         self.default_config = {}
+        self.config_description = {}
 
     def fix_texts(self, boxes):
         for box in boxes:
@@ -68,6 +69,17 @@ class TestSortieLanguageDetection(unittest.TestCase):
         gui_module.__path__ = []
         communicate_module = types.ModuleType('ok.gui.Communicate')
         communicate_module.communicate = types.SimpleNamespace(task_list_updated=self.signal)
+        character_profiles_module = types.ModuleType('character_profiles')
+        character_profiles_module.MAIN_MEMBER_KEY = '主战员优先级'
+        character_profiles_module.BATTLE_MEMBER_KEY = '出战主战员优先级'
+        character_profiles_module.CONFIGURED_CARDS_KEY = '配置卡牌'
+        character_profiles_module.PROFILE_CARD_SOURCES_KEY = '_角色卡牌来源'
+        character_profiles_module.load_task_profiles = lambda task, create=True: []
+        character_profiles_module.sync_task_character_cards = lambda task, notify=False: False
+        character_profiles_module.make_manage_profiles_callback = lambda task: None
+        character_profiles_module.make_import_profiles_callback = lambda task: None
+        character_profiles_module.make_export_profiles_callback = lambda task: None
+        character_profiles_module.make_character_selection_callback = lambda task, key, other: None
         self.module_patch = patch.dict(sys.modules, {
             'ok': ok_module,
             'ok.gui': gui_module,
@@ -75,8 +87,9 @@ class TestSortieLanguageDetection(unittest.TestCase):
             'utils_sortie': types.SimpleNamespace(PAGE_HANDLERS=[]),
             'config_io': types.SimpleNamespace(
                 make_export_callback=lambda task: None,
-                make_import_callback=lambda task: None,
+                make_import_callback=lambda task, **kwargs: None,
             ),
+            'character_profiles': character_profiles_module,
             'opencc': types.SimpleNamespace(OpenCC=_OpenCC),
         })
         self.module_patch.start()
@@ -212,6 +225,16 @@ class TestSortieLanguageDetection(unittest.TestCase):
             "唯一的审判者",
             "两条岔路",
         ], task.default_config["命运优先级"])
+
+    def test_character_profile_config_and_actions_are_declared(self):
+        task = self.module.SortieMode()
+
+        self.assertEqual([], task.default_config["配置卡牌"])
+        self.assertEqual({}, task.default_config["_角色卡牌来源"])
+        self.assertIn("角色档案", task.config_type)
+        self.assertIn("角色优先级选择", task.config_type)
+        self.assertEqual(3, len(task.config_type["角色档案"]["buttons"]))
+        self.assertEqual(2, len(task.config_type["角色优先级选择"]["buttons"]))
 
 
 if __name__ == '__main__':

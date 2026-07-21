@@ -1,7 +1,8 @@
-import ok
-import sys
 import os
+import sys
 import traceback
+
+from src.app import KesApp
 from src.config import config
 
 if __name__ == '__main__':
@@ -11,9 +12,8 @@ if __name__ == '__main__':
             exe_dir = os.path.dirname(sys.executable)
             os.chdir(sys._MEIPASS)
             config["config_folder"] = os.path.join(exe_dir, "configs")
-        config = config
-        ok = ok.OK(config)
-        ok.start()
+        app = KesApp(config)
+        app.start()
     except Exception as e:
         log_path = os.path.join(os.path.dirname(sys.executable), "error.log")
         with open(log_path, "w", encoding="utf-8") as f:

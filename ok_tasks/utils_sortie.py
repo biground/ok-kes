@@ -27,8 +27,17 @@ import re
 import random
 import cv2
 
+from character_profiles import member_name_matches
+
 
 # ------------------------- 出击模式独有工具 -------------------------
+
+_HAND_CARD_OCR_REGION = (0.150, 0.640, 0.840, 0.870)
+_HAND_CARD_NAME_REGION = (0.159, 0.683, 0.836, 0.831)
+_CARD_NAME_ALIASES = {
+    "剑之雨": "剑雨",
+    "劍之雨": "剑雨",
+}
 
 def _get_member_priority(task: TriggerTask):
     """读取主战员优先级配置，返回列表；解析失败使用默认顺序。"""
@@ -68,39 +77,81 @@ def _is_card_name(name):
     return True
 
 
+def _normalize_card_name(name):
+    """清理卡牌名并合并游戏内同名卡牌的常见写法。"""
+    cleaned = re.sub(r'[^\u4e00-\u9fffA-Za-z0-9]', '', str(name or ''))
+    return _CARD_NAME_ALIASES.get(cleaned, cleaned)
+
+
+def _card_name_matches(configured_name, recognized_name):
+    """判断配置卡牌名与 OCR 卡牌名是否匹配，兼容“剑雨/剑之雨”。"""
+    configured = _normalize_card_name(configured_name)
+    recognized = _normalize_card_name(recognized_name)
+    return bool(configured and recognized and (configured in recognized or recognized in configured))
+
+
+def _filter_hand_card_names(task: TriggerTask, texts):
+    """从一组 OCR 结果中筛出手牌标题。"""
+    x1, y1, x2, y2 = _HAND_CARD_NAME_REGION
+    return [
+        box for box in texts
+        if x1 <= (box.x + box.width / 2) / task.width <= x2
+        and y1 <= (box.y + box.height / 2) / task.height <= y2
+        and not _card_key(box.name)
+        and len(box.name.strip()) > 1
+        and _is_card_name(box.name)
+    ]
+
+
+def _merge_card_name_boxes(task: TriggerTask, primary, fallback):
+    """按屏幕位置合并局部和全屏 OCR 卡牌名，重复时保留置信度更高者。"""
+    merged = []
+    for candidate in [*primary, *fallback]:
+        candidate_cx = (candidate.x + candidate.width / 2) / task.width
+        candidate_cy = (candidate.y + candidate.height / 2) / task.height
+        duplicate_index = next((
+            index for index, existing in enumerate(merged)
+            if abs(candidate_cx - (existing.x + existing.width / 2) / task.width) <= 0.025
+            and abs(candidate_cy - (existing.y + existing.height / 2) / task.height) <= 0.040
+        ), None)
+        if duplicate_index is None:
+            merged.append(candidate)
+            continue
+        existing = merged[duplicate_index]
+        if getattr(candidate, 'confidence', 0) > getattr(existing, 'confidence', 0):
+            merged[duplicate_index] = candidate
+    return merged
+
+
 def _hand_card_names(task: TriggerTask):
-    """读取手牌区域内的卡牌名，排除按键和类型标签文本。"""
-    x1, y1, x2, y2 = 0.159, 0.683, 0.836, 0.831
+    """优先用手牌局部 OCR 读取卡牌名，并与全屏 OCR 结果合并。"""
+    full_screen_cards = _filter_hand_card_names(task, getattr(task, 'all_texts', []))
+    local_cards = []
+    ocr = getattr(task, 'ocr', None)
+    if callable(ocr):
+        try:
+            local_texts = _simplify_texts(ocr(*_HAND_CARD_OCR_REGION, threshold=0.5) or [])
+            local_cards = _filter_hand_card_names(task, local_texts)
+            task.log_info(f"手牌局部OCR识别到{len(local_cards)}张卡牌: {[b.name for b in local_cards]}")
+        except Exception as error:
+            task.log_info(f"手牌局部OCR失败，使用全屏OCR结果: {error}")
 
-    # 打印所有文本及其坐标，帮助判断手牌区域过滤问题
-    task.log_info(f"_hand_card_names 区域: cx=[{x1}, {x2}], cy=[{y1}, {y2}]")
-    for b in task.all_texts:
-        cx = (b.x + b.width / 2) / task.width
-        cy = (b.y + b.height / 2) / task.height
-        in_region = x1 <= cx <= x2 and y1 <= cy <= y2
-        has_key = _card_key(b.name)
-        name_len = len(b.name.strip())
-        task.log_info(f"  OCR: 「{b.name}」 cx={cx:.4f} cy={cy:.4f} in_region={in_region} has_key={has_key} len={name_len}")
-
-    boxes = [b for b in task.all_texts
-             if x1 <= (b.x + b.width / 2) / task.width <= x2
-             and y1 <= (b.y + b.height / 2) / task.height <= y2]
-    result = [b for b in boxes
-              if not _card_key(b.name)
-              and len(b.name.strip()) > 1
-              and _is_card_name(b.name)]
-    task.log_info(f"_hand_card_names 区域共{len(boxes)}个文本，过滤后剩{len(result)}个: {[b.name for b in result]}")
+    result = _merge_card_name_boxes(task, local_cards, full_screen_cards)
+    result.sort(key=lambda box: box.x)
+    task.log_info(
+        f"_hand_card_names 合并后识别到{len(result)}张卡牌: {[b.name for b in result]}"
+    )
     return result
 
 
-def _hand_cards(task: TriggerTask):
-    """识别手牌，返回按位置排序的卡牌名与按键列表，按键缺失时根据手牌数和间距推断。"""
+def _hand_cards(task: TriggerTask, card_names=None):
+    """识别手牌，返回卡牌名、快捷键及可用于 ADB 触控的屏幕坐标。"""
     # 按键：包含数字的
     keys = [(b.x / task.width, b.y / task.height, _card_key(b.name)) for b in task.all_texts if _card_key(b.name)]
     keys.sort(key=lambda x: x[0])
 
     # 卡牌名
-    card_names = _hand_card_names(task)
+    card_names = list(card_names) if card_names is not None else _hand_card_names(task)
     card_names.sort(key=lambda b: b.x)
 
     # 读取手牌数
@@ -113,6 +164,8 @@ def _hand_cards(task: TriggerTask):
         cx = name_box.x / task.width
         left_x = (name_box.x) / task.width  # 使用左边缘坐标，避免文本长度影响间距判断
         cy = name_box.y / task.height
+        touch_x = (name_box.x + name_box.width / 2) / task.width  # 使用卡牌名中心作为触控起点
+        touch_y = (name_box.y + name_box.height / 2) / task.height  # 保证起点位于卡牌可见区域
 
         candidates = []
         for kx, ky, k in keys:
@@ -129,9 +182,11 @@ def _hand_cards(task: TriggerTask):
         if candidates:
             best = min(candidates, key=lambda x: cx - x[0])
             used_keys.add(best[2])
-            cards.append({"name": name_box.name, "key": best[2], "x": cx, "left_x": left_x})
+            cards.append({"name": name_box.name, "key": best[2], "x": cx, "left_x": left_x,
+                          "touch_x": touch_x, "touch_y": touch_y, "box": name_box})
         else:
-            cards.append({"name": name_box.name, "key": None, "x": cx, "left_x": left_x})
+            cards.append({"name": name_box.name, "key": None, "x": cx, "left_x": left_x,
+                          "touch_x": touch_x, "touch_y": touch_y, "box": name_box})
 
     # 推断缺失的按键：用最小相邻间距作为 expected_spacing 进行插值
     # 以最近的前一张已有按键的卡牌为基准推算，避免累积误差
@@ -181,6 +236,95 @@ def _try_all_card_keys(task: TriggerTask, count):
         task.sleep(0.5)
         task.send_key("enter")
         task.sleep(1)
+
+
+def _is_adb_battle(task: TriggerTask):
+    """判断当前战斗是否由 ADB 设备承载。"""
+    is_adb = getattr(task, "is_adb", None)
+    return bool(is_adb and is_adb())
+
+
+def _card_is_playable(task: TriggerTask, card):
+    """判断卡牌是否具备当前设备所需的操作信息。"""
+    if _is_adb_battle(task):
+        return card.get("touch_x") is not None and card.get("touch_y") is not None
+    return card.get("key") is not None
+
+
+def _battle_target_coordinates(task: TriggerTask):
+    """从敌方行动计数 OCR 推断默认目标；识别失败时使用右侧战场安全坐标。"""
+    candidates = []
+    for box in getattr(task, "all_texts", []):
+        text = box.name.strip()
+        if not re.fullmatch(r"\d{1,2}", text):
+            continue
+        center_x = (box.x + box.width / 2) / task.width
+        center_y = (box.y + box.height / 2) / task.height
+        if 0.45 <= center_x <= 0.96 and 0.18 <= center_y <= 0.48:
+            candidates.append((center_x, center_y, text))
+    if candidates:
+        counter_x, counter_y, counter_text = min(candidates, key=lambda item: item[0])
+        target_x = max(0.52, min(counter_x, 0.90))
+        target_y = min(counter_y + 0.18, 0.58)
+        task.log_info(
+            f"ADB 默认目标: 敌方行动计数「{counter_text}」"
+            f"位于({counter_x:.4f}, {counter_y:.4f})，目标坐标({target_x:.4f}, {target_y:.4f})"
+        )
+        return target_x, target_y
+    task.log_info("ADB 默认目标: 未识别到敌方行动计数，使用右侧战场坐标(0.6500, 0.4500)")
+    return 0.65, 0.45
+
+
+def _play_card(task: TriggerTask, card):
+    """Windows 使用快捷键出牌；ADB 从卡牌坐标拖向识别到的敌方目标。"""
+    if _is_adb_battle(task):
+        touch_x = card.get("touch_x")
+        touch_y = card.get("touch_y")
+        if touch_x is None or touch_y is None:
+            task.log_info(f"ADB 坐标出牌失败: 卡牌「{card.get('name', '')}」缺少触控坐标")
+            return False
+        target_x, target_y = _battle_target_coordinates(task)
+        task.log_info(
+            f"ADB 坐标出牌: 卡牌「{card.get('name', '')}」"
+            f"从({touch_x:.4f}, {touch_y:.4f})拖到默认目标({target_x:.4f}, {target_y:.4f})"
+        )
+        task.swipe_relative(touch_x, touch_y, target_x, target_y, duration=0.35)
+        task.sleep(2)
+        return True
+
+    key = card.get("key")
+    if key is None:
+        task.log_info(f"快捷键出牌失败: 卡牌「{card.get('name', '')}」缺少按键")
+        return False
+    task.log_info(f"快捷键出牌: 卡牌「{card.get('name', '')}」→ 按键 {key}")
+    task.send_key(key)
+    task.sleep(1)
+    task.send_key("enter")
+    task.sleep(2)
+    return True
+
+
+def _try_cards_fallback(task: TriggerTask, cards, count):
+    """按设备选择安全兜底：ADB 每帧拖一张卡，Windows 逐个尝试快捷键。"""
+    if not _is_adb_battle(task):
+        _try_all_card_keys(task, count)
+        return True
+
+    candidates = [card for card in cards if _card_is_playable(task, card)]
+    if not candidates:
+        task.log_info("ADB 坐标兜底出牌失败: 当前帧没有识别到可拖动的卡牌坐标")
+        return False
+    card = max(candidates, key=lambda item: item["touch_x"])
+    task.log_info(f"ADB 坐标兜底出牌: 从右侧优先选择「{card['name']}」")
+    return _play_card(task, card)
+
+
+def _finish_turn(task: TriggerTask, finishturn_feature):
+    """点击识别到的结束回合按钮。"""
+    task.log_info("检测到 finishturn 特征，点击目标区域结束回合")
+    task.click_box(finishturn_feature, after_sleep=0)
+    task.sleep(1)
+    return True
 
 
 def _read_hand_count(task: TriggerTask):
@@ -261,7 +405,10 @@ def _select_battle_member(task: TriggerTask, max_scrolls=5):
             cy = (b.y + b.height / 2) / task.height
             task.log_info(f"  box: name=「{b.name}」 cx={cx:.4f} cy={cy:.4f} x={b.x} y={b.y} w={b.width} h={b.height}")
         for name in priority:
-            member = next((box for box in boxes if name in box.name), None)
+            member = next((
+                box for box in boxes
+                if member_name_matches(task, name, box.name)
+            ), None)
             if member:
                 cx = (member.x + member.width / 2) / task.width
                 cy = (member.y + member.height / 2) / task.height
@@ -338,20 +485,25 @@ def handle_battle_page(task: TriggerTask):
             avg_b, avg_g, avg_r = avg_bgr
             task.log_info(f"EP能量条区域颜色: B={avg_b:.1f} G={avg_g:.1f} R={avg_r:.1f} (期望接近 B=255 G=255 R=193)")
             if abs(avg_b - 255) <= 15 and abs(avg_g - 255) <= 15 and abs(avg_r - 193) <= 15:
-                task.log_info("EP能量达到最大值，随机释放Ego技能")
-                task.send_key(random.choice(["F1", "F2", "F3"]))
-                task.sleep(1)
-                task.send_key("enter")
-                task.sleep(4)
-                return True
+                if _is_adb_battle(task):
+                    task.log_info("EP能量达到最大值；ADB 模式禁用 F1/F2/F3，继续使用坐标出牌")
+                else:
+                    task.log_info("EP能量达到最大值，随机释放Ego技能")
+                    task.send_key(random.choice(["F1", "F2", "F3"]))
+                    task.sleep(1)
+                    task.send_key("enter")
+                    task.sleep(4)
+                    return True
 
     finishturn_box = task.box_of_screen(0.844, 0.782, 0.998, 0.990)
-    if not task.find_feature(feature_name="finishturn", box=finishturn_box):
+    finishturn_features = task.find_feature(feature_name="finishturn", box=finishturn_box)
+    if not finishturn_features:
         task.log_info("未检测到finishturn特征，return True等待下一帧")
         return True
+    finishturn_feature = finishturn_features[0]
 
     card_names = _hand_card_names(task)
-    cards = _hand_cards(task)
+    cards = _hand_cards(task, card_names)
 
     if (cards or card_names):
         # 出牌卡手检测：追踪上一次尝试打出的卡牌是否连续多轮仍留在手牌中
@@ -361,10 +513,12 @@ def handle_battle_page(task: TriggerTask):
             task._last_attempted_card = None
 
         # 检查"出牌优先级"配置
-        play_priority = _get_config_value(task, "出牌优先级", [])
+        play_priority = _get_card_list(task, "出牌优先级")
         if play_priority and cards:
             for pri_name in play_priority:
-                matched = next((c for c in cards if pri_name and (pri_name in c["name"] or c["name"] in pri_name) and c["key"] is not None), None)
+                matched = next((c for c in cards if pri_name
+                                and _card_name_matches(pri_name, c["name"])
+                                and _card_is_playable(task, c)), None)
                 if matched:
                     # 检测当前匹配到的卡牌是否与上次尝试打出的是同一张且仍在手牌中
                     if task._last_attempted_card == matched["name"]:
@@ -374,17 +528,14 @@ def handle_battle_page(task: TriggerTask):
                             task.log_info(f"卡牌「{matched['name']}」连续3次未出掉，执行兜底出牌")
                             task._last_attempted_card = None
                             task._play_stuck_count = 0
-                            _try_all_card_keys(task, hand_count)
+                            _try_cards_fallback(task, cards, hand_count)
                             return True
                     else:
                         task._last_attempted_card = matched["name"]
                         task._play_stuck_count = 0
 
-                    task.log_info(f"出牌优先级匹配: 卡牌「{matched['name']}」→ 按键 {matched['key']}")
-                    task.send_key(matched['key'])
-                    task.sleep(1)
-                    task.send_key("enter")
-                    task.sleep(2)
+                    task.log_info(f"出牌优先级匹配: 卡牌「{matched['name']}」")
+                    _play_card(task, matched)
                     if "极光" in matched["name"]:
                         task.log_info(f"卡牌「{matched['name']}」包含极光，额外等待2秒")
                         task.sleep(2)
@@ -397,21 +548,17 @@ def handle_battle_page(task: TriggerTask):
         task._last_attempted_card = None
         task._play_stuck_count = 0
         # 兜底从大到小出牌
-        task.log_info(f"未命中出牌优先级，按当前手牌数{hand_count}从大到小兜底出牌")
-        _try_all_card_keys(task, hand_count)
+        task.log_info(f"未命中出牌优先级，按当前设备模式兜底出牌（手牌数{hand_count}）")
+        _try_cards_fallback(task, cards, hand_count)
         return True
     else:
-        finishturn_box = task.box_of_screen(0.844, 0.782, 0.998, 0.990)
-        if task.find_feature(feature_name="finishturn", box=finishturn_box):
-            task.log_info("检测到finishturn特征，按E结束回合")
-            task.send_key("e")
-            task.sleep(1)
+        _finish_turn(task, finishturn_feature)
         return True
     return True
 
 
 def handle_get_card(task: TriggerTask):
-    """获得卡牌页面: 按优先级选择卡牌。"""
+    """获得卡牌页面: 按优先级选择卡牌，未命中时跳过。"""
     title = find_box_at_point(task, 0.502, 0.128)
     tip = find_box_at_point(task, 0.883, 0.131)
     if not (title and title.name == "获得卡牌" and tip and re.search(r"请选择.*获得的卡牌", tip.name)):
@@ -429,27 +576,25 @@ def handle_get_card(task: TriggerTask):
         task.log_info("获得卡牌: 三个槽位均未识别到卡牌，无法选择")
         return False
 
-    priority = _get_config_value(task, "获得卡牌优先级", [])
+    priority = _get_card_list(task, "获得卡牌优先级")
     task.log_info(f"获得卡牌: 识别到{len(cards)}张卡牌: {[c['name'] for c in cards]}, 当前优先级配置: {priority}")
     for name in priority:
         task.log_info(f"获得卡牌: 检查优先级「{name}」是否在卡牌列表中")
-        chosen = next((card for card in cards if name in card["name"]), None)
+        chosen = next((card for card in cards if _card_name_matches(name, card["name"])), None)
         if chosen:
             task.log_info(f"获得卡牌: 优先选择「{chosen['name']}」(匹配优先级「{name}」)")
             task.click(chosen["x"], chosen["y"])
             task.sleep(0.5)
             task.click(0.912, 0.931)
             return True
-    if _get_config_value(task, '跳过非优先级卡牌', True):
-        task.log_info("获得卡牌: 未命中任何优先级卡牌，跳过非优先级卡牌")
+    task.log_info("获得卡牌: 未命中任何优先级卡牌，点击跳过")
+    skip_box = find_box_at_point(task, 0.749, 0.931)
+    if skip_box and _clean_match(skip_box.name, "跳过"):
+        task.click_box(skip_box)
+    else:
+        task.log_info("获得卡牌: 未识别到跳过按钮文字，点击跳过按钮固定位置")
         task.click(0.749, 0.931)
-        task.sleep(1)
-        return True
-    chosen = random.choice(cards)
-    task.log_info(f"获得卡牌: 跳过非优先级卡牌配置为False，随机选择「{chosen['name']}」")
-    task.click(chosen["x"], chosen["y"])
     task.sleep(1)
-    # task.click(0.912, 0.931)
     return True
 
 
@@ -468,8 +613,8 @@ def handle_draw_card_event(task: TriggerTask):
     if not cards:
         return False
     chosen = None
-    for name in _get_config_value(task, "获得卡牌优先级", []):
-        chosen = next((card for card in cards if name in card.name), None)
+    for name in _get_card_list(task, "获得卡牌优先级"):
+        chosen = next((card for card in cards if _card_name_matches(name, card.name)), None)
         if chosen:
             task.log_info(f"抽牌事件: 优先选择「{chosen.name}」")
             break
@@ -566,7 +711,10 @@ def handle_member_selection(task: TriggerTask):
     slots = _read_member_slots(task)
     chosen = None
     for name in priority:
-        chosen = next((slot for slot in slots if name in slot["name"] and not_blacklisted(slot)), None)
+        chosen = next((
+            slot for slot in slots
+            if member_name_matches(task, name, slot["name"]) and not_blacklisted(slot)
+        ), None)
         if chosen:
             task.log_info(f"主战员选择: 优先选择「{chosen['name']}」")
             break
@@ -579,7 +727,10 @@ def handle_member_selection(task: TriggerTask):
         task.all_texts = _simplify_texts(task.ocr())
         slots = _read_member_slots(task)
         for name in priority:
-            chosen = next((slot for slot in slots if name in slot["name"] and not_blacklisted(slot)), None)
+            chosen = next((
+                slot for slot in slots
+                if member_name_matches(task, name, slot["name"]) and not_blacklisted(slot)
+            ), None)
             if chosen:
                 task.log_info(f"主战员选择: 刷新后选择「{chosen['name']}」")
                 break
@@ -625,12 +776,11 @@ def handle_rational_supply(task: TriggerTask):
 
 
 def handle_ether_supply(task: TriggerTask):
-    """以太补充页面: 提示用户手动补充以太。"""
+    """以太补充页面: 体力不足时停止当前出击任务。"""
     box = find_box_at_point(task, 0.502, 0.139)
     if box and box.name == _get_game_text(task, '以太补充'):
-        task.log_info("检测到以太补充页面，请手动补充以太后再启动功能")
-        task.click(0.347, 0.803)
-        task.sleep(0.5)
+        task.log_info("检测到以太补充页面，体力不足，停止自动出击任务")  # 记录任务停止原因。
+        task.disable()  # 立即停用当前 TriggerTask，避免重复尝试进入出击。
         return True
     return False
 
@@ -692,7 +842,9 @@ def handle_curiosity_activate(task: TriggerTask):
     box = find_box_at_point(task, 0.499, 0.129)
     if box and _get_game_text(task, '请选择要手持的卡牌') in box.name:
         task.log_info("检测到尼娅的好奇心发动页面")
-        priority = ["剑雨", "展开极光", "一缕光芒", "万众英雄"]
+        priority = _get_card_list(task, "获得卡牌优先级")
+        if not priority:
+            priority = ["剑雨", "展开极光", "一缕光芒", "万众英雄"]
         px1, py1 = int(0.168 * task.width), int(0.247 * task.height)
         px2, py2 = int(0.868 * task.width), int(0.318 * task.height)
         cards = [
@@ -703,7 +855,7 @@ def handle_curiosity_activate(task: TriggerTask):
         chosen_card = None
         for pri_name in priority:
             for card in cards:
-                if card.name in pri_name:
+                if _card_name_matches(pri_name, card.name):
                     chosen_card = card
                     task.log_info(f"按优先级选择卡牌: {card.name}")
                     break
@@ -784,7 +936,15 @@ def handle_return_to_draw_pile(task: TriggerTask):
     if not cards:
         task.log_info("未找到手牌")
         return False
-    chosen = cards[0]
+    chosen = None
+    for priority_name in _get_card_list(task, "丢弃卡牌优先级"):
+        chosen = next((card for card in cards if _card_name_matches(priority_name, card.name)), None)
+        if chosen:
+            task.log_info(f"放回抽牌堆: 按丢弃优先级选择「{chosen.name}」")
+            break
+    if chosen is None:
+        chosen = cards[0]
+        task.log_info(f"放回抽牌堆: 未命中丢弃优先级，选择最左侧「{chosen.name}」")
     task.click_box(chosen)
     task.sleep(1)
     # task.click(0.934, 0.883)
@@ -806,8 +966,9 @@ def handle_escape(task: TriggerTask):
 
 def handle_rest_sortie(task: TriggerTask):
     """出击模式休息页面: 包含休息和闪光两个功能，检测到对应条件分别处理。"""
-    # 检测闪光区域 (0.788,0.463)-(0.870,0.594) 是否存在"闪光"和"30"
+    # 使用当前游戏语言的映射文本识别闪光标题；费用“30”只用于诊断 OCR 状态。
     flash_x1, flash_y1, flash_x2, flash_y2 = 0.788, 0.463, 0.870, 0.594
+    flash_text = _get_game_text(task, '闪光')
     has_flash_text = False
     has_flash_cost = False
     flash_box = None
@@ -815,14 +976,14 @@ def handle_rest_sortie(task: TriggerTask):
         cx = (b.x + b.width / 2) / task.width
         cy = (b.y + b.height / 2) / task.height
         if flash_x1 <= cx <= flash_x2 and flash_y1 <= cy <= flash_y2:
-            if "闪光" in b.name:
+            if flash_text in b.name:
                 has_flash_text = True
                 flash_box = b
             if "30" in b.name:
                 has_flash_cost = True
 
-    if has_flash_text and has_flash_cost and flash_box and hasattr(task, 'node_status') and task.node_status.get('flash_or_rest', False):
-        task.log_info("休息区存在可闪光选项")
+    if has_flash_text and flash_box and hasattr(task, 'node_status') and task.node_status.get('flash_or_rest', False):
+        task.log_info(f"休息区存在可闪光选项: 文本={flash_text}, 费用30识别={has_flash_cost}")
 
         # 获取当前信用点
         credit = _get_current_credit(task)
@@ -846,7 +1007,7 @@ def handle_rest_sortie(task: TriggerTask):
         except (ValueError, TypeError):
             flash_threshold = 60
         task.log_info(f"生命值={hp_percent}%, 阈值={flash_threshold}%, 信用点={credit}")
-        if credit > 30 and hp_percent >= flash_threshold:
+        if credit >= 30 and hp_percent >= flash_threshold:
             task.log_info("满足闪光条件，点击闪光")
             task.click_box(flash_box)
             task.sleep(2)

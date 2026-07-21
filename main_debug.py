@@ -1,8 +1,7 @@
-import ok
+from src.app import KesApp
 from src.config import config
 
 if __name__ == '__main__':
-    config = config
     config['debug'] = True
-    ok = ok.OK(config)
-    ok.start()
+    app = KesApp(config)
+    app.start()
